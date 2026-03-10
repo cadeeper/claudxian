@@ -3,6 +3,7 @@
  */
 
 import type { Locale } from '../../i18n/types';
+import type { BackendId } from './backend';
 import type { ClaudeModel, ThinkingBudget } from './models';
 
 const UNIX_BLOCKED_COMMANDS = [
@@ -120,6 +121,34 @@ export type HostnameCliPaths = Record<string, string>;
 /** Permission mode for tool execution. */
 export type PermissionMode = 'yolo' | 'plan' | 'normal';
 
+export type CodexReasoningEffort = '' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+export type CodexPlanModeReasoningEffort = '' | 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+
+export interface CodexReasoningEffortOption<TValue extends string> {
+  value: TValue;
+  label: string;
+  description: string;
+}
+
+export const CODEX_REASONING_EFFORTS: CodexReasoningEffortOption<CodexReasoningEffort>[] = [
+  { value: '', label: 'Default', description: 'Use the Codex default reasoning level.' },
+  { value: 'minimal', label: 'Minimal', description: 'Fastest and lowest reasoning effort.' },
+  { value: 'low', label: 'Low', description: 'Low reasoning effort for lightweight tasks.' },
+  { value: 'medium', label: 'Med', description: 'Balanced reasoning effort.' },
+  { value: 'high', label: 'High', description: 'Higher reasoning effort for harder tasks.' },
+  { value: 'xhigh', label: 'Ultra', description: 'Maximum reasoning effort.' },
+];
+
+export const CODEX_PLAN_REASONING_EFFORTS: CodexReasoningEffortOption<CodexPlanModeReasoningEffort>[] = [
+  { value: '', label: 'Default', description: 'Use the Codex default plan-mode reasoning level.' },
+  { value: 'none', label: 'None', description: 'Disable extra reasoning in plan mode.' },
+  { value: 'minimal', label: 'Minimal', description: 'Fastest plan-mode reasoning effort.' },
+  { value: 'low', label: 'Low', description: 'Low reasoning effort for plan mode.' },
+  { value: 'medium', label: 'Med', description: 'Balanced plan-mode reasoning effort.' },
+  { value: 'high', label: 'High', description: 'Higher reasoning effort for planning.' },
+  { value: 'xhigh', label: 'Ultra', description: 'Maximum plan-mode reasoning effort.' },
+];
+
 /** User decision from the approval modal. */
 export type ApprovalDecision = 'allow' | 'allow-always' | 'deny' | 'cancel';
 
@@ -230,12 +259,13 @@ export interface KeyboardNavigationSettings {
 export type TabBarPosition = 'input' | 'header';
 
 /**
- * Claudian-specific settings stored in .claude/claudian-settings.json.
+ * Claudian-specific settings stored in .claude/claudxian-settings.json.
  * These settings are NOT shared with Claude Code CLI.
  */
 export interface ClaudianSettings {
   // User preferences
   userName: string;
+  defaultBackend: BackendId;
 
   // Security (Claudian-specific, CC uses permissions.deny instead)
   enableBlocklist: boolean;
@@ -244,6 +274,10 @@ export interface ClaudianSettings {
 
   // Model & thinking (Claudian uses enum, CC uses full model ID string)
   model: ClaudeModel;
+  codexModel?: string;
+  codexModelOptions?: string[];
+  codexReasoningEffort?: CodexReasoningEffort;
+  codexPlanModeReasoningEffort?: CodexPlanModeReasoningEffort;
   thinkingBudget: ThinkingBudget;
   enableAutoTitleGeneration: boolean;
   titleGenerationModel: string;  // Model for auto title generation (empty = auto)
@@ -302,6 +336,7 @@ export interface ClaudianSettings {
 export const DEFAULT_SETTINGS: ClaudianSettings = {
   // User preferences
   userName: '',
+  defaultBackend: 'claude',
 
   // Security
   enableBlocklist: true,
@@ -310,6 +345,10 @@ export const DEFAULT_SETTINGS: ClaudianSettings = {
 
   // Model & thinking
   model: 'haiku',
+  codexModel: '',
+  codexModelOptions: [],
+  codexReasoningEffort: '',
+  codexPlanModeReasoningEffort: '',
   thinkingBudget: 'off',
   enableAutoTitleGeneration: true,
   titleGenerationModel: '',  // Empty = auto (ANTHROPIC_DEFAULT_HAIKU_MODEL or claude-haiku-4-5)

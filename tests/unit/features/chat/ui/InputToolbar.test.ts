@@ -2,6 +2,9 @@ import { createMockEl } from '@test/helpers/mockElement';
 
 import type { UsageInfo } from '@/core/types';
 import {
+  CodexModelSelector,
+  CodexPermissionToggle,
+  CodexReasoningEffortSelector,
   ContextUsageMeter,
   createInputToolbar,
   McpServerSelector,
@@ -30,12 +33,14 @@ function makeUsage(overrides: Partial<UsageInfo> = {}): UsageInfo {
 function createMockCallbacks(overrides: Record<string, any> = {}) {
   return {
     onModelChange: jest.fn().mockResolvedValue(undefined),
-    onThinkingBudgetChange: jest.fn().mockResolvedValue(undefined),
+    onReasoningChange: jest.fn().mockResolvedValue(undefined),
     onPermissionModeChange: jest.fn().mockResolvedValue(undefined),
     getSettings: jest.fn().mockReturnValue({
+      backendId: 'claude',
       model: 'sonnet',
       thinkingBudget: 'low',
       permissionMode: 'normal',
+      show1MModel: false,
     }),
     getEnvironmentVariables: jest.fn().mockReturnValue(''),
     ...overrides,
@@ -70,9 +75,11 @@ describe('ModelSelector', () => {
 
   it('should display first model when current model not found', () => {
     callbacks.getSettings.mockReturnValue({
+      backendId: 'claude',
       model: 'nonexistent',
       thinkingBudget: 'low',
       permissionMode: 'normal',
+      show1MModel: false,
     });
     selector.updateDisplay();
     const label = parentEl.querySelector('.claudian-model-label');
@@ -119,6 +126,7 @@ describe('ModelSelector', () => {
 
   it('should show Sonnet (1M) when show1MModel is enabled', () => {
     callbacks.getSettings.mockReturnValue({
+      backendId: 'claude',
       model: 'sonnet',
       thinkingBudget: 'low',
       permissionMode: 'normal',
@@ -134,9 +142,11 @@ describe('ModelSelector', () => {
       'CLAUDE_CODE_USE_BEDROCK=1\nANTHROPIC_MODEL=us.anthropic.claude-sonnet-4-20250514-v1:0'
     );
     callbacks.getSettings.mockReturnValue({
+      backendId: 'claude',
       model: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
       thinkingBudget: 'low',
       permissionMode: 'normal',
+      show1MModel: false,
     });
     selector.renderOptions();
     selector.updateDisplay();
@@ -175,9 +185,11 @@ describe('ThinkingBudgetSelector', () => {
 
   it('should display Off when budget is off', () => {
     callbacks.getSettings.mockReturnValue({
+      backendId: 'claude',
       model: 'sonnet',
       thinkingBudget: 'off',
       permissionMode: 'normal',
+      show1MModel: false,
     });
     selector.updateDisplay();
     const current = parentEl.querySelector('.claudian-thinking-current');
@@ -207,7 +219,7 @@ describe('ThinkingBudgetSelector', () => {
     const highGear = gears.find((g: any) => g.textContent === 'High');
 
     await highGear?.dispatchEvent('click', { stopPropagation: () => {} });
-    expect(callbacks.onThinkingBudgetChange).toHaveBeenCalledWith('high');
+    expect(callbacks.onReasoningChange).toHaveBeenCalledWith('high');
   });
 
   it('should set title with token count for non-off budgets', () => {
@@ -248,9 +260,11 @@ describe('PermissionToggle', () => {
 
   it('should display YOLO label when in yolo mode', () => {
     callbacks.getSettings.mockReturnValue({
+      backendId: 'claude',
       model: 'sonnet',
       thinkingBudget: 'low',
       permissionMode: 'yolo',
+      show1MModel: false,
     });
     const parentEl2 = createMockEl();
     new PermissionToggle(parentEl2, callbacks);
@@ -261,9 +275,11 @@ describe('PermissionToggle', () => {
 
   it('should show PLAN label and hide toggle in plan mode', () => {
     callbacks.getSettings.mockReturnValue({
+      backendId: 'claude',
       model: 'sonnet',
       thinkingBudget: 'low',
       permissionMode: 'plan',
+      show1MModel: false,
     });
     const parentEl2 = createMockEl();
     new PermissionToggle(parentEl2, callbacks);
@@ -278,9 +294,11 @@ describe('PermissionToggle', () => {
 
   it('should add active class when in yolo mode', () => {
     callbacks.getSettings.mockReturnValue({
+      backendId: 'claude',
       model: 'sonnet',
       thinkingBudget: 'low',
       permissionMode: 'yolo',
+      show1MModel: false,
     });
     const parentEl2 = createMockEl();
     new PermissionToggle(parentEl2, callbacks);
@@ -302,9 +320,11 @@ describe('PermissionToggle', () => {
 
   it('should toggle from yolo to normal on click', async () => {
     callbacks.getSettings.mockReturnValue({
+      backendId: 'claude',
       model: 'sonnet',
       thinkingBudget: 'low',
       permissionMode: 'yolo',
+      show1MModel: false,
     });
     const parentEl2 = createMockEl();
     new PermissionToggle(parentEl2, callbacks);
@@ -312,6 +332,141 @@ describe('PermissionToggle', () => {
     const toggle = parentEl2.querySelector('.claudian-toggle-switch');
     await toggle?.dispatchEvent('click');
     expect(callbacks.onPermissionModeChange).toHaveBeenCalledWith('normal');
+  });
+});
+
+
+describe('Codex toolbar components', () => {
+  it('uses Codex model options in the Codex model selector', () => {
+    const parentEl = createMockEl();
+    const callbacks = createMockCallbacks({
+      getSettings: jest.fn().mockReturnValue({
+        backendId: 'codex',
+        model: '',
+        modelOptions: [
+          { value: '', label: 'Default', description: 'Default model' },
+          { value: 'gpt-5-codex', label: 'gpt-5-codex', description: 'Codex model' },
+        ],
+        codexReasoningEffort: 'low',
+        codexPlanModeReasoningEffort: 'high',
+        permissionMode: 'normal',
+      }),
+    });
+
+    new CodexModelSelector(parentEl, callbacks);
+
+    const container = parentEl.querySelector('.claudian-model-selector--codex');
+    const label = container?.querySelector('.claudian-model-label');
+    expect(label?.textContent).toBe('Default');
+  });
+
+  it('shows reasoning options for Codex normal mode', async () => {
+    const parentEl = createMockEl();
+    const callbacks = createMockCallbacks({
+      getSettings: jest.fn().mockReturnValue({
+        backendId: 'codex',
+        model: '',
+        modelOptions: [{ value: '', label: 'Default', description: 'Default model' }],
+        codexReasoningEffort: 'low',
+        codexPlanModeReasoningEffort: 'high',
+        permissionMode: 'normal',
+      }),
+    });
+
+    new CodexReasoningEffortSelector(parentEl, callbacks);
+
+    const container = parentEl.querySelector('.claudian-thinking-selector--codex');
+    const label = container?.querySelector('.claudian-thinking-label-text');
+    expect(label?.textContent).toBe('Reasoning:');
+
+    const current = container?.querySelector('.claudian-thinking-current');
+    expect(current?.textContent).toBe('Low');
+
+    const highOption = (container?.querySelector('.claudian-thinking-options')?.children || [])
+      .find((item: any) => item.textContent === 'High');
+    await highOption?.dispatchEvent('click', { stopPropagation: () => {} });
+    expect(callbacks.onReasoningChange).toHaveBeenCalledWith('high');
+  });
+
+  it('switches Codex reasoning selector to plan mode values', () => {
+    const parentEl = createMockEl();
+    const callbacks = createMockCallbacks({
+      getSettings: jest.fn().mockReturnValue({
+        backendId: 'codex',
+        model: '',
+        modelOptions: [{ value: '', label: 'Default', description: 'Default model' }],
+        codexReasoningEffort: 'low',
+        codexPlanModeReasoningEffort: 'none',
+        permissionMode: 'plan',
+      }),
+    });
+
+    new CodexReasoningEffortSelector(parentEl, callbacks);
+
+    const container = parentEl.querySelector('.claudian-thinking-selector--codex');
+    const label = container?.querySelector('.claudian-thinking-label-text');
+    const current = container?.querySelector('.claudian-thinking-current');
+    expect(label?.textContent).toBe('Plan:');
+    expect(current?.textContent).toBe('None');
+  });
+
+  it('renders Codex mode/access dropdowns and changes mode', async () => {
+    const parentEl = createMockEl();
+    const callbacks = createMockCallbacks({
+      getSettings: jest.fn().mockReturnValue({
+        backendId: 'codex',
+        model: '',
+        modelOptions: [{ value: '', label: 'Default', description: 'Default model' }],
+        codexReasoningEffort: 'low',
+        codexPlanModeReasoningEffort: 'high',
+        prePlanPermissionMode: 'yolo',
+        permissionMode: 'normal',
+      }),
+    });
+
+    new CodexPermissionToggle(parentEl, callbacks);
+
+    const selects = parentEl.querySelectorAll('.claudian-permission-select');
+    expect(selects.length).toBe(2);
+
+    const modeSelect = Array.from(selects).find((item: any) => item.hasClass('claudian-permission-select--mode')) as any;
+    const accessSelect = Array.from(selects).find((item: any) => item.hasClass('claudian-permission-select--access')) as any;
+    expect(parentEl.querySelectorAll('.claudian-permission-label').length).toBe(0);
+    expect(modeSelect?.getAttribute('aria-label')).toBe('Codex mode');
+    expect(accessSelect?.getAttribute('aria-label')).toBe('Codex access');
+    expect(modeSelect?.value).toBe('agent');
+    expect(accessSelect?.value).toBe('normal');
+
+    modeSelect.value = 'plan';
+    await modeSelect?.dispatchEvent('change', { stopPropagation: () => {} });
+    expect(callbacks.onPermissionModeChange).toHaveBeenCalledWith('plan');
+  });
+
+  it('restores Codex agent access from pre-plan mode', async () => {
+    const parentEl = createMockEl();
+    const callbacks = createMockCallbacks({
+      getSettings: jest.fn().mockReturnValue({
+        backendId: 'codex',
+        model: '',
+        modelOptions: [{ value: '', label: 'Default', description: 'Default model' }],
+        codexReasoningEffort: 'low',
+        codexPlanModeReasoningEffort: 'high',
+        prePlanPermissionMode: 'yolo',
+        permissionMode: 'plan',
+      }),
+    });
+
+    new CodexPermissionToggle(parentEl, callbacks);
+
+    const modeSelect = parentEl.querySelector('.claudian-permission-select--mode') as any;
+    const accessSelect = parentEl.querySelector('.claudian-permission-select--access') as any;
+    expect(modeSelect?.value).toBe('plan');
+    expect(accessSelect?.value).toBe('yolo');
+    expect(accessSelect?.disabled).toBe(true);
+
+    modeSelect.value = 'agent';
+    await modeSelect?.dispatchEvent('change', { stopPropagation: () => {} });
+    expect(callbacks.onPermissionModeChange).toHaveBeenCalledWith('yolo');
   });
 });
 

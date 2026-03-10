@@ -1,4 +1,4 @@
-import type { ClaudianService } from '../../../core/agent';
+import type { AgentSessionService } from '../../../core/agent';
 import { extractResolvedAnswers, extractResolvedAnswersFromResultText, parseTodoInput } from '../../../core/tools';
 import {
   isSubagentToolName,
@@ -45,7 +45,7 @@ export interface StreamControllerDeps {
   getFileContextManager: () => FileContextManager | null;
   updateQueueIndicator: () => void;
   /** Get the agent service from the tab. */
-  getAgentService?: () => ClaudianService | null;
+  getAgentService?: () => AgentSessionService | null;
 }
 
 export class StreamController {

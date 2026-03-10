@@ -30,18 +30,26 @@ class MockResizeObserver {
 global.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
 
 // Mock ClaudianService
-jest.mock('@/core/agent', () => ({
-  ClaudianService: jest.fn().mockImplementation(() => ({
+jest.mock('@/core/agent', () => {
+  const ClaudianService = jest.fn().mockImplementation(() => ({
     ensureReady: jest.fn().mockResolvedValue(true),
     closePersistentQuery: jest.fn(),
     isReady: jest.fn().mockReturnValue(false),
+    getBackendId: jest.fn().mockReturnValue('claude'),
+    cleanup: jest.fn(),
+    reloadMcpServers: jest.fn().mockResolvedValue(undefined),
     applyForkState: jest.fn((conv: any) => conv.sessionId ?? conv.forkSource?.sessionId ?? null),
     onReadyStateChange: jest.fn((listener: (ready: boolean) => void) => {
       listener(false);
       return () => {};
     }),
-  })),
-}));
+  }));
+
+  return {
+    ClaudianService,
+    createAgentSessionService: jest.fn().mockImplementation((_plugin: any, _mcpManager: any, _backendId: any) => new ClaudianService()),
+  };
+});
 
 // Mock factories must be defined before jest.mock calls due to hoisting
 // These will be initialized fresh in beforeEach
@@ -66,6 +74,8 @@ const createMockSlashCommandDropdown = () => ({
   isVisible: jest.fn().mockReturnValue(false),
   hide: jest.fn(),
   setEnabled: jest.fn(),
+  setHiddenCommands: jest.fn(),
+  setBuiltinHiddenCommands: jest.fn(),
   destroy: jest.fn(),
 });
 
@@ -103,12 +113,16 @@ const createMockModelSelector = () => ({
   updateDisplay: jest.fn(),
   renderOptions: jest.fn(),
   setReady: jest.fn(),
+  setVisible: jest.fn(),
 });
 
 const createMockClaudianService = (overrides?: {
   ensureReady?: jest.Mock;
   onReadyStateChange?: jest.Mock;
 }) => ({
+  getBackendId: jest.fn().mockReturnValue('claude'),
+  cleanup: jest.fn(),
+  reloadMcpServers: jest.fn().mockResolvedValue(undefined),
   ensureReady: overrides?.ensureReady ?? jest.fn().mockResolvedValue(true),
   closePersistentQuery: jest.fn(),
   isReady: jest.fn().mockReturnValue(false),
@@ -121,6 +135,7 @@ const createMockClaudianService = (overrides?: {
 
 const createMockThinkingBudgetSelector = () => ({
   updateDisplay: jest.fn(),
+  setVisible: jest.fn(),
 });
 
 const createMockContextUsageMeter = () => ({
@@ -137,9 +152,10 @@ const createMockExternalContextSelector = () => ({
 const createMockMcpServerSelector = () => ({
   setMcpManager: jest.fn(),
   addMentionedServers: jest.fn(),
+  setVisible: jest.fn(),
 });
 
-const createMockPermissionToggle = () => ({});
+const createMockPermissionToggle = () => ({ updateDisplay: jest.fn() });
 
 // Shared mock instances (reset in beforeEach)
 let mockFileContextManager: ReturnType<typeof createMockFileContextManager>;
@@ -471,6 +487,33 @@ describe('Tab - Service Initialization', () => {
 
       expect(tab.service).toBeDefined();
       expect(tab.serviceInitialized).toBe(true);
+    });
+
+
+    it('should honor backend override when initializing during backend switch', async () => {
+      const agentModule = jest.requireMock('@/core/agent') as {
+        createAgentSessionService: jest.Mock;
+      };
+      const options = createMockOptions({
+        conversation: {
+          id: 'conv-claude',
+          title: 'Claude Conversation',
+          messages: [],
+          sessionId: 'session-123',
+          backendId: 'claude',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      });
+      const tab = createTab(options);
+
+      await initializeTabService(tab, options.plugin, options.mcpManager, 'codex');
+
+      expect(agentModule.createAgentSessionService).toHaveBeenCalledWith(
+        options.plugin,
+        options.mcpManager,
+        'codex'
+      );
     });
 
     it('should ensureReady without session ID (just spin up process)', async () => {

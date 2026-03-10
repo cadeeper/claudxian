@@ -1,6 +1,6 @@
 import { Notice } from 'obsidian';
 
-import type { ClaudianService } from '../../../core/agent';
+import type { AgentSessionService } from '../../../core/agent';
 import type { McpServerManager } from '../../../core/mcp';
 import type { SlashCommand } from '../../../core/types';
 import { t } from '../../../i18n';
@@ -438,7 +438,10 @@ export class TabManager implements TabManagerInterface {
   }
 
   private async createForkConversation(context: ForkContext): Promise<string> {
-    const conversation = await this.plugin.createConversation();
+    const conversation = await this.plugin.createConversation(
+      undefined,
+      context.backendId ?? this.plugin.settings.defaultBackend,
+    );
 
     const title = context.sourceTitle
       ? this.buildForkTitle(context.sourceTitle, context.forkAtUserMessage)
@@ -571,11 +574,11 @@ export class TabManager implements TabManagerInterface {
   // ============================================
 
   /**
-   * Broadcasts a function call to all tabs' ClaudianService instances.
+   * Broadcasts a function call to all tabs' AgentSessionService instances.
    * Used by settings managers to apply configuration changes to all tabs.
    * @param fn Function to call on each service.
    */
-  async broadcastToAllTabs(fn: (service: ClaudianService) => Promise<void>): Promise<void> {
+  async broadcastToAllTabs(fn: (service: AgentSessionService) => Promise<void>): Promise<void> {
     const promises: Promise<void>[] = [];
 
     for (const tab of this.tabs.values()) {

@@ -1,33 +1,39 @@
-# Claudian
+# Claudxian
 
-![GitHub stars](https://img.shields.io/github/stars/YishenTu/claudian?style=social)
-![GitHub release](https://img.shields.io/github/v/release/YishenTu/claudian)
-![License](https://img.shields.io/github/license/YishenTu/claudian)
+![GitHub stars](https://img.shields.io/github/stars/cadeeper/claudxian?style=social)
+![GitHub release](https://img.shields.io/github/v/release/cadeeper/claudxian)
+![License](https://img.shields.io/github/license/cadeeper/claudxian)
 
 ![Preview](Preview.png)
 
-An Obsidian plugin that embeds Claude Code as an AI collaborator in your vault. Your vault becomes Claude's working directory, giving it full agentic capabilities: file read/write, search, bash commands, and multi-step workflows.
+An Obsidian plugin that embeds Claude Code and Codex as AI collaborators in your vault. Your vault becomes the agent's working directory, giving it full agentic capabilities: file read/write, search, bash commands, planning, and multi-step workflows.
+
+## About
+
+Claudxian is based on the original [Claudian](https://github.com/YishenTu/claudian) plugin and extends it for multi-backend use inside Obsidian. This fork keeps the original Claude Code workflow while adding Codex compatibility and backend-aware UI/interaction support.
 
 ## Features
 
-- **Full Agentic Capabilities**: Leverage Claude Code's power to read, write, and edit files, search, and execute bash commands, all within your Obsidian vault.
+- **Dual Backend Support**: Use Claude Code or Codex in the same Obsidian workflow, with backend-specific settings and UI controls.
+- **Full Agentic Capabilities**: Leverage Claude Code or Codex to read, write, and edit files, search, execute bash commands, and complete multi-step tasks inside your Obsidian vault.
 - **Context-Aware**: Automatically attach the focused note, mention files with `@`, exclude notes by tag, include editor selection (Highlight), and access external directories for additional context.
 - **Vision Support**: Analyze images by sending them via drag-and-drop, paste, or file path.
 - **Inline Edit**: Edit selected text or insert content at cursor position directly in notes with word-level diff preview and read-only tool access for context.
 - **Instruction Mode (`#`)**: Add refined custom instructions to your system prompt directly from the chat input, with review/edit in a modal.
 - **Slash Commands**: Create reusable prompt templates triggered by `/command`, with argument placeholders, `@file` references, and optional inline bash substitutions.
-- **Skills**: Extend Claudian with reusable capability modules that are automatically invoked based on context, compatible with Claude Code's skill format.
+- **Skills**: Extend Claudxian with reusable capability modules that are automatically invoked based on context, compatible with Claude Code's skill format.
 - **Custom Agents**: Define custom subagents that Claude can invoke, with support for tool restrictions and model overrides.
 - **Claude Code Plugins**: Enable Claude Code plugins installed via the CLI, with automatic discovery from `~/.claude/plugins` and per-vault configuration. Plugin skills, agents, and slash commands integrate seamlessly.
 - **MCP Support**: Connect external tools and data sources via Model Context Protocol servers (stdio, SSE, HTTP) with context-saving mode and `@`-mention activation.
-- **Advanced Model Control**: Select between Haiku, Sonnet, and Opus, configure custom models via environment variables, fine-tune thinking budget, and enable Sonnet with 1M context window (requires Max subscription).
-- **Plan Mode**: Toggle plan mode via Shift+Tab in the chat input. Claudian explores and designs before implementing, presenting a plan for approval with options to approve in a new session, continue in the current session, or provide feedback.
+- **Advanced Model Control**: Configure Claude and Codex independently, including Claude models/thinking budget and Codex models/reasoning effort/agent-plan mode options.
+- **Plan Mode**: Toggle plan mode via Shift+Tab in the chat input. Claudxian explores and designs before implementing, presenting a plan for approval with options to approve in a new session, continue in the current session, or provide feedback.
 - **Security**: Permission modes (YOLO/Safe/Plan), safety blocklist, and vault confinement with symlink-safe checks.
 - **Claude in Chrome**: Allow Claude to interact with Chrome through the `claude-in-chrome` extension.
 
 ## Requirements
 
-- [Claude Code CLI](https://code.claude.com/docs/en/overview) installed (strongly recommend install Claude Code via Native Install)
+- [Claude Code CLI](https://code.claude.com/docs/en/overview) installed if you want to use the Claude backend
+- [Codex CLI](https://github.com/openai/codex) installed if you want to use the Codex backend
 - Obsidian v1.8.9+
 - Claude subscription/API or Custom model provider that supports Anthropic API format ([Openrouter](https://openrouter.ai/docs/guides/guides/claude-code-integration), [Kimi](https://platform.moonshot.ai/docs/guide/agent-support), [GLM](https://docs.z.ai/devpack/tool/claude), [DeepSeek](https://api-docs.deepseek.com/guides/anthropic_api), etc.)
 - Desktop only (macOS, Linux, Windows)
@@ -36,14 +42,14 @@ An Obsidian plugin that embeds Claude Code as an AI collaborator in your vault. 
 
 ### From GitHub Release (recommended)
 
-1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/YishenTu/claudian/releases/latest)
-2. Create a folder called `claudian` in your vault's plugins folder:
+1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/cadeeper/claudxian/releases/latest)
+2. Create a folder called `claudxian` in your vault's plugins folder:
    ```
-   /path/to/vault/.obsidian/plugins/claudian/
+   /path/to/vault/.obsidian/plugins/claudxian/
    ```
-3. Copy the downloaded files into the `claudian` folder
+3. Copy the downloaded files into the `claudxian` folder
 4. Enable the plugin in Obsidian:
-   - Settings → Community plugins → Enable "Claudian"
+   - Settings → Community plugins → Enable "Claudxian"
 
 ### Using BRAT
 
@@ -52,9 +58,9 @@ An Obsidian plugin that embeds Claude Code as an AI collaborator in your vault. 
 1. Install the BRAT plugin from Obsidian Community Plugins
 2. Enable BRAT in Settings → Community plugins
 3. Open BRAT settings and click "Add Beta plugin"
-4. Enter the repository URL: `https://github.com/YishenTu/claudian`
-5. Click "Add Plugin" and BRAT will install Claudian automatically
-6. Enable Claudian in Settings → Community plugins
+4. Enter the repository URL: `https://github.com/cadeeper/claudxian`
+5. Click "Add Plugin" and BRAT will install Claudxian automatically
+6. Enable Claudxian in Settings → Community plugins
 
 > **Tip**: BRAT will automatically check for updates and notify you when a new version is available.
 
@@ -63,8 +69,8 @@ An Obsidian plugin that embeds Claude Code as an AI collaborator in your vault. 
 1. Clone this repository into your vault's plugins folder:
    ```bash
    cd /path/to/vault/.obsidian/plugins
-   git clone https://github.com/YishenTu/claudian.git
-   cd claudian
+   git clone https://github.com/cadeeper/claudxian.git
+   cd claudxian
    ```
 
 2. Install dependencies and build:
@@ -74,7 +80,7 @@ An Obsidian plugin that embeds Claude Code as an AI collaborator in your vault. 
    ```
 
 3. Enable the plugin in Obsidian:
-   - Settings → Community plugins → Enable "Claudian"
+   - Settings → Community plugins → Enable "Claudxian"
 
 ### Development
 
@@ -94,7 +100,7 @@ npm run build
 1. Click the bot icon in ribbon or use command palette to open chat
 2. Select text + hotkey for inline edit
 
-Use it like Claude Code—read, write, edit, search files in your vault.
+Use it like Claude Code or Codex—read, write, edit, and search files in your vault.
 
 ### Context
 
@@ -114,7 +120,7 @@ Use it like Claude Code—read, write, edit, search files in your vault.
 - **Instruction Mode**: Type `#` to add refined instructions to system prompt
 - **Slash Commands**: Type `/` for custom prompt templates or skills
 - **Skills**: Add `skill/SKILL.md` files to `~/.claude/skills/` or `{vault}/.claude/skills/`, recommended to use Claude Code to manage skills
-- **Custom Agents**: Add `agent.md` files to `~/.claude/agents/` (global) or `{vault}/.claude/agents/` (vault-specific); select via `@Agents/` in chat, or prompt Claudian to invoke agents
+- **Custom Agents**: Add `agent.md` files to `~/.claude/agents/` (global) or `{vault}/.claude/agents/` (vault-specific); select via `@Agents/` in chat, or prompt Claudxian to invoke agents
 - **Claude Code Plugins**: Enable plugins via Settings → Claude Code Plugins, recommended to use Claude Code to manage plugins
 - **MCP**: Add external tools via Settings → MCP Servers; use `@mcp-server` in chat to activate
 
@@ -158,6 +164,7 @@ Use it like Claude Code—read, write, edit, search files in your vault.
 
 **Advanced**
 - **Claude CLI path**: Custom path to Claude Code CLI (leave empty for auto-detection)
+- **Codex CLI path / detection**: Claudxian can auto-detect `codex` from common install locations or PATH
 
 ## Safety and Permissions
 
@@ -173,7 +180,7 @@ Use it like Claude Code—read, write, edit, search files in your vault.
 
 ## Privacy & Data Use
 
-- **Sent to API**: Your input, attached files, images, and tool call outputs. Default: Anthropic; custom endpoint via `ANTHROPIC_BASE_URL`.
+- **Sent to API**: Your input, attached files, images, and tool call outputs. The active backend determines the upstream provider: Claude backend uses your Anthropic-compatible setup, while Codex backend uses the local Codex CLI/runtime.
 - **Local storage**: Settings, session metadata, and commands stored in `vault/.claude/`; session messages in `~/.claude/projects/` (SDK-native); legacy sessions in `vault/.claude/sessions/`.
 - **No telemetry**: No tracking beyond your configured API provider.
 
@@ -195,6 +202,21 @@ If you encounter `spawn claude ENOENT` or `Claude CLI not found`, the plugin can
 
 **Alternative**: Add your Node.js bin directory to PATH in Settings → Environment → Custom variables.
 
+### Codex CLI not found
+
+If Codex mode is enabled but Claudxian cannot start Codex, make sure the `codex` CLI is installed and available in your shell PATH seen by Obsidian.
+
+**Quick checks**:
+```bash
+which codex
+codex --version
+```
+
+If Obsidian still cannot find it, add the matching bin directory to Settings → Environment → Custom variables, for example:
+```bash
+PATH=/opt/homebrew/bin:$PATH
+```
+
 ### npm CLI and Node.js not in same directory
 
 If using npm-installed CLI, check if `claude` and `node` are in the same directory:
@@ -209,7 +231,7 @@ If different, GUI apps like Obsidian may not find Node.js.
 1. Install native binary (recommended)
 2. Add Node.js path to Settings → Environment: `PATH=/path/to/node/bin`
 
-**Still having issues?** [Open a GitHub issue](https://github.com/YishenTu/claudian/issues) with your platform, CLI path, and error message.
+**Still having issues?** [Open a GitHub issue](https://github.com/cadeeper/claudxian/issues) with your platform, CLI path, and error message.
 
 ## Architecture
 
@@ -217,7 +239,7 @@ If different, GUI apps like Obsidian may not find Node.js.
 src/
 ├── main.ts                      # Plugin entry point
 ├── core/                        # Core infrastructure
-│   ├── agent/                   # Claude Agent SDK wrapper (ClaudianService)
+│   ├── agent/                   # Claude/Codex session services and adapters
 │   ├── agents/                  # Custom agent management (AgentManager)
 │   ├── commands/                # Slash command management (SlashCommandManager)
 │   ├── hooks/                   # PreToolUse/PostToolUse hooks
@@ -263,7 +285,7 @@ Licensed under the [MIT License](LICENSE).
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/image?repos=YishenTu/claudian&type=date&legend=top-left)](https://www.star-history.com/?type=date&legend=top-left&repos=YishenTu%2Fclaudian)
+[![Star History Chart](https://api.star-history.com/image?repos=cadeeper/claudxian&type=date&legend=top-left)](https://www.star-history.com/?type=date&legend=top-left&repos=cadeeper%2Fclaudxian)
 
 ## Acknowledgments
 

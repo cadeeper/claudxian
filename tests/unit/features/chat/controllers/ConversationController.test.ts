@@ -58,6 +58,7 @@ function createMockDeps(overrides: Partial<ConversationControllerDeps> = {}): Co
         userName: '',
         enableAutoTitleGeneration: true,
         permissionMode: 'yolo',
+        defaultBackend: 'claude',
       },
     } as any,
     state,
@@ -179,6 +180,69 @@ describe('ConversationController', () => {
         expect(deps.state.currentConversationId).toBeNull();
 
         clearMessagesSpy.mockRestore();
+      });
+    });
+
+    describe('backend switching', () => {
+      it('recreates the agent service when creating a new conversation for another backend', async () => {
+        let currentService = {
+          getBackendId: jest.fn().mockReturnValue('claude'),
+          setSessionId: jest.fn(),
+        } as any;
+        const recreateAgentService = jest.fn().mockImplementation(async () => {
+          currentService = {
+            getBackendId: jest.fn().mockReturnValue('codex'),
+            setSessionId: jest.fn(),
+          } as any;
+        });
+
+        deps = createMockDeps({
+          getAgentService: () => currentService,
+          recreateAgentService,
+        });
+        deps.plugin.settings.defaultBackend = 'codex';
+        controller = new ConversationController(deps);
+
+        await controller.createNew();
+
+        expect(recreateAgentService).toHaveBeenCalledTimes(1);
+        expect(recreateAgentService).toHaveBeenCalledWith('codex');
+      });
+
+      it('recreates the agent service when switching to a conversation on another backend', async () => {
+        let currentService = {
+          getBackendId: jest.fn().mockReturnValue('claude'),
+          setSessionId: jest.fn(),
+          applyForkState: jest.fn().mockReturnValue(null),
+        } as any;
+        const recreateAgentService = jest.fn().mockImplementation(async () => {
+          currentService = {
+            getBackendId: jest.fn().mockReturnValue('codex'),
+            setSessionId: jest.fn(),
+            applyForkState: jest.fn().mockReturnValue(null),
+          } as any;
+        });
+
+        deps = createMockDeps({
+          getAgentService: () => currentService,
+          recreateAgentService,
+        });
+        deps.state.currentConversationId = 'old-conv';
+        (deps.plugin.switchConversation as jest.Mock).mockResolvedValue({
+          id: 'new-conv',
+          title: 'Switched Conversation',
+          messages: [],
+          sessionId: null,
+          backendId: 'codex',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        });
+        controller = new ConversationController(deps);
+
+        await controller.switchTo('new-conv');
+
+        expect(recreateAgentService).toHaveBeenCalledTimes(1);
+        expect(recreateAgentService).toHaveBeenCalledWith('codex');
       });
     });
 
@@ -2220,5 +2284,52 @@ describe('ConversationController - Rewind', () => {
     expect(mockAgentService.rewind).toHaveBeenCalledWith('user-uuid', 'prev-a');
     const msg = mockNotice.mock.calls[0][0] as string;
     expect(msg).toContain('Save failed');
+  });
+});
+
+
+describe('ConversationController - Codex persistence', () => {
+  let controller: ConversationController;
+  let deps: ConversationControllerDeps;
+  let mockAgentService: any;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockAgentService = {
+      getBackendId: jest.fn().mockReturnValue('codex'),
+      getSessionId: jest.fn().mockReturnValue('codex-thread-1'),
+      setSessionId: jest.fn(),
+      consumeSessionInvalidation: jest.fn().mockReturnValue(false),
+    };
+    deps = createMockDeps({
+      getAgentService: () => mockAgentService,
+    });
+    controller = new ConversationController(deps);
+  });
+
+  it('keeps Codex conversations on JSONL storage when a session id appears', async () => {
+    deps.state.currentConversationId = 'conv-codex';
+    deps.state.messages = [{ id: '1', role: 'user', content: 'test', timestamp: Date.now() }];
+
+    (deps.plugin.getConversationById as jest.Mock).mockResolvedValue({
+      id: 'conv-codex',
+      backendId: 'codex',
+      messages: [],
+      sessionId: null,
+      sdkSessionId: undefined,
+      isNative: false,
+    });
+
+    await controller.save();
+
+    expect(deps.plugin.updateConversation).toHaveBeenCalledWith(
+      'conv-codex',
+      expect.objectContaining({
+        messages: deps.state.messages,
+        sessionId: 'codex-thread-1',
+        sdkSessionId: undefined,
+        isNative: undefined,
+      })
+    );
   });
 });

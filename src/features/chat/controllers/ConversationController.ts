@@ -1,7 +1,8 @@
 import { Notice, setIcon } from 'obsidian';
 
-import type { ClaudianService } from '../../../core/agent';
-import type { Conversation } from '../../../core/types';
+import type { AgentSessionService } from '../../../core/agent';
+import type { BackendId, Conversation } from '../../../core/types';
+import { getBackendCapabilities, normalizeBackendId } from '../../../core/types';
 import { t } from '../../../i18n';
 import type ClaudianPlugin from '../../../main';
 import { confirm } from '../../../shared/modals/ConfirmModal';
@@ -36,7 +37,8 @@ export interface ConversationControllerDeps {
   clearQueuedMessage: () => void;
   getTitleGenerationService: () => TitleGenerationService | null;
   getStatusPanel: () => StatusPanel | null;
-  getAgentService?: () => ClaudianService | null;
+  getAgentService?: () => AgentSessionService | null;
+  recreateAgentService?: (backendId?: BackendId) => Promise<void>;
 }
 
 type SaveOptions = {
@@ -52,8 +54,24 @@ export class ConversationController {
     this.callbacks = callbacks;
   }
 
-  private getAgentService(): ClaudianService | null {
+  private getAgentService(): AgentSessionService | null {
     return this.deps.getAgentService?.() ?? null;
+  }
+
+  private async ensureAgentServiceForBackend(backendId: unknown): Promise<AgentSessionService | null> {
+    const targetBackend = normalizeBackendId(backendId, this.deps.plugin.settings.defaultBackend);
+    const currentService = this.getAgentService();
+
+    if (currentService?.getBackendId?.() === targetBackend) {
+      return currentService;
+    }
+
+    if (!this.deps.recreateAgentService) {
+      return currentService;
+    }
+
+    await this.deps.recreateAgentService(targetBackend);
+    return this.getAgentService();
   }
 
   // ============================================
@@ -87,6 +105,8 @@ export class ConversationController {
       if (state.currentConversationId && state.messages.length > 0) {
         await this.save();
       }
+
+      await this.ensureAgentServiceForBackend(plugin.settings.defaultBackend);
 
       subagentManager.orphanAllActive();
       subagentManager.clear();
@@ -275,6 +295,8 @@ export class ConversationController {
         return;
       }
 
+      await this.ensureAgentServiceForBackend(conversation.backendId);
+
       state.currentConversationId = conversation.id;
       state.messages = [...conversation.messages];
       state.usage = conversation.usage ?? null;
@@ -340,6 +362,17 @@ export class ConversationController {
 
   async rewind(userMessageId: string): Promise<void> {
     const { plugin, state, renderer } = this.deps;
+
+    const backendId = normalizeBackendId(
+      state.currentConversationId
+        ? (await plugin.getConversationById(state.currentConversationId))?.backendId
+        : this.getAgentService()?.getBackendId?.(),
+      plugin.settings.defaultBackend,
+    );
+    if (!getBackendCapabilities(backendId).supportsRewind) {
+      new Notice('Rewind not available for this backend.');
+      return;
+    }
 
     if (state.isStreaming) {
       new Notice(t('chat.rewind.unavailableStreaming'));
@@ -439,13 +472,16 @@ export class ConversationController {
     }
 
     const agentService = this.getAgentService();
-    const sessionId = agentService?.getSessionId() ?? null;
+    const sessionId = agentService?.getSessionId?.() ?? null;
     const sessionInvalidated = agentService?.consumeSessionInvalidation?.() ?? false;
 
     // Entry point with messages - create conversation lazily
     // New conversations always use SDK-native storage.
     if (!state.currentConversationId && state.messages.length > 0) {
-      const conversation = await plugin.createConversation(sessionId ?? undefined);
+      const conversation = await plugin.createConversation(
+        sessionId ?? undefined,
+        agentService?.getBackendId?.() ?? plugin.settings.defaultBackend,
+      );
       state.currentConversationId = conversation.id;
     }
 
@@ -458,8 +494,12 @@ export class ConversationController {
 
     // Check if this is a native session and promote legacy sessions after first SDK session capture
     const conversation = await plugin.getConversationById(state.currentConversationId!);
+    const backendId = normalizeBackendId(
+      conversation?.backendId ?? agentService?.getBackendId?.() ?? plugin.settings.defaultBackend
+    );
+    const supportsNativeHistory = getBackendCapabilities(backendId).supportsNativeHistory;
     const wasNative = conversation?.isNative ?? false;
-    const shouldPromote = !wasNative && !!sessionId;
+    const shouldPromote = supportsNativeHistory && !wasNative && !!sessionId;
     const isNative = wasNative || shouldPromote;
     const legacyMessages = conversation?.messages ?? [];
     const legacyCutoffAt = shouldPromote
@@ -751,7 +791,7 @@ export class ConversationController {
     // Time-specific greetings
     const getTimeGreetings = (): string[] => {
       if (hour >= 5 && hour < 12) {
-        return [personalize('Good morning'), 'Coffee and Claudian time?'];
+        return [personalize('Good morning'), 'Coffee and Claudxian time?'];
       } else if (hour >= 12 && hour < 18) {
         return [personalize('Good afternoon'), personalize('Hey there'), personalize("How's it going") + '?'];
       } else if (hour >= 18 && hour < 22) {

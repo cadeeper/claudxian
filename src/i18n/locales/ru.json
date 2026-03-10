@@ -65,10 +65,14 @@
     }
   },
   "settings": {
-    "title": "Настройки Claudian",
+    "title": "Настройки Claudxian",
     "customization": "Персонализация",
+    "backend": {
+      "name": "Default backend",
+      "desc": "Choose the runtime for new conversations. Existing conversations keep their current backend. Codex requires the `codex` CLI to be installed and available on PATH."
+    },
     "userName": {
-      "name": "Как Claudian должен обращаться к вам?",
+      "name": "Как Claudxian должен обращаться к вам?",
       "desc": "Ваше имя для персонализированных приветствий (оставьте пустым для общих приветствий)"
     },
     "excludedTags": {
@@ -138,7 +142,7 @@
     },
     "hiddenSlashCommands": {
       "name": "Скрытые команды",
-      "desc": "Скрыть определённые команды со слэшем из выпадающего списка. Полезно для скрытия команд Claude Code, которые не актуальны для Claudian. Вводите имена команд без начального слэша, по одной на строку.",
+      "desc": "Скрыть определённые команды со слэшем из выпадающего списка. Полезно для скрытия команд Claude Code, которые не актуальны для Claudxian. Вводите имена команд без начального слэша, по одной на строку.",
       "placeholder": "commit\nbuild\ntest"
     },
     "mcpServers": {

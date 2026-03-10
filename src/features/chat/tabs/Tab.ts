@@ -1,10 +1,11 @@
 import type { Component } from 'obsidian';
 import { Notice } from 'obsidian';
 
-import { ClaudianService } from '../../../core/agent';
+import type { AgentSessionService } from '../../../core/agent';
+import { createAgentSessionService } from '../../../core/agent';
 import type { McpServerManager } from '../../../core/mcp';
-import type { ChatMessage, ClaudeModel, Conversation, PermissionMode, SlashCommand, ThinkingBudget } from '../../../core/types';
-import { DEFAULT_CLAUDE_MODELS, DEFAULT_THINKING_BUDGET, getContextWindowSize } from '../../../core/types';
+import type { BackendId, ChatMessage, ClaudeModel, Conversation, PermissionMode, SlashCommand, ThinkingBudget } from '../../../core/types';
+import { BACKEND_CLAUDE, BACKEND_CODEX, DEFAULT_CLAUDE_MODELS, DEFAULT_THINKING_BUDGET, getBackendCapabilities, getContextWindowSize, normalizeBackendId } from '../../../core/types';
 import { t } from '../../../i18n';
 import type ClaudianPlugin from '../../../main';
 import { SlashCommandDropdown } from '../../../shared/components/SlashCommandDropdown';
@@ -34,6 +35,7 @@ import {
   InstructionModeManager as InstructionModeManagerClass,
   NavigationSidebar,
   StatusPanel,
+  type ToolbarModelOption,
 } from '../ui';
 import type { TabData, TabDOMElements, TabId } from './types';
 import { generateTabId, TEXTAREA_MAX_HEIGHT_PERCENT, TEXTAREA_MIN_MAX_HEIGHT } from './types';
@@ -56,6 +58,7 @@ export interface TabCreateOptions {
  */
 export function createTab(options: TabCreateOptions): TabData {
   const {
+    plugin,
     containerEl,
     conversation,
     tabId,
@@ -80,6 +83,7 @@ export function createTab(options: TabCreateOptions): TabData {
     },
     onConversationChanged: (conversationId) => {
       onConversationIdChanged?.(conversationId);
+      updateTabBackendUI(tab, plugin);
     },
   });
 
@@ -213,6 +217,7 @@ function buildTabDOM(contentEl: HTMLElement): TabDOMElements {
     inputContainerEl,
     inputWrapper,
     inputEl,
+    backendBadgeEl: null,
     navRowEl,
     contextRowEl,
     selectionIndicatorEl: null,
@@ -238,18 +243,23 @@ function buildTabDOM(contentEl: HTMLElement): TabDOMElements {
 export async function initializeTabService(
   tab: TabData,
   plugin: ClaudianPlugin,
-  mcpManager: McpServerManager
+  mcpManager: McpServerManager,
+  backendIdOverride?: BackendId,
 ): Promise<void> {
   if (tab.serviceInitialized) {
     return;
   }
 
-  let service: ClaudianService | null = null;
+  let service: AgentSessionService | null = null;
   let unsubscribeReadyState: (() => void) | null = null;
 
   try {
-    // Create per-tab ClaudianService
-    service = new ClaudianService(plugin, mcpManager);
+    const conversation = backendIdOverride === undefined && tab.conversationId
+      ? await plugin.getConversationById(tab.conversationId)
+      : null;
+    const backendId = backendIdOverride ?? conversation?.backendId ?? plugin.settings.defaultBackend;
+
+    service = createAgentSessionService(plugin, mcpManager, backendId);
     unsubscribeReadyState = service.onReadyStateChange((ready) => {
       tab.ui.modelSelector?.setReady(ready);
     });
@@ -259,17 +269,13 @@ export async function initializeTabService(
     // Single source of truth: tab.conversationId determines if we have a session to resume
     let sessionId: string | undefined;
     let externalContextPaths = plugin.settings.persistentExternalContextPaths || [];
-    if (tab.conversationId) {
-      const conversation = await plugin.getConversationById(tab.conversationId);
+    if (conversation) {
+      sessionId = service.applyForkState(conversation) ?? undefined;
 
-      if (conversation) {
-        sessionId = service.applyForkState(conversation) ?? undefined;
-
-        const hasMessages = conversation.messages.length > 0;
-        externalContextPaths = hasMessages
-          ? conversation.externalContextPaths || []
-          : (plugin.settings.persistentExternalContextPaths || []);
-      }
+      const hasMessages = conversation.messages.length > 0;
+      externalContextPaths = hasMessages
+        ? conversation.externalContextPaths || []
+        : (plugin.settings.persistentExternalContextPaths || []);
     }
 
     // Ensure SDK process is ready
@@ -426,14 +432,17 @@ function initializeInputToolbar(tab: TabData, plugin: ClaudianPlugin): void {
 
   const inputToolbar = dom.inputWrapper.createDiv({ cls: 'claudian-input-toolbar' });
   const toolbarComponents = createInputToolbar(inputToolbar, {
-    getSettings: () => ({
-      model: plugin.settings.model,
-      thinkingBudget: plugin.settings.thinkingBudget,
-      permissionMode: plugin.settings.permissionMode,
-      show1MModel: plugin.settings.show1MModel,
-    }),
+    getSettings: () => buildToolbarSettings(tab, plugin),
     getEnvironmentVariables: () => plugin.getActiveEnvironmentVariables(),
     onModelChange: async (model: ClaudeModel) => {
+      const backendId = resolveTabBackendId(tab, plugin);
+      if (backendId === BACKEND_CODEX) {
+        plugin.settings.codexModel = model.trim();
+        await plugin.saveSettings();
+        updateTabBackendUI(tab, plugin);
+        return;
+      }
+
       plugin.settings.model = model;
       const isDefaultModel = DEFAULT_CLAUDE_MODELS.find((m) => m.value === model);
       if (isDefaultModel) {
@@ -447,7 +456,6 @@ function initializeInputToolbar(tab: TabData, plugin: ClaudianPlugin): void {
       tab.ui.modelSelector?.updateDisplay();
       tab.ui.modelSelector?.renderOptions();
 
-      // Recalculate context usage percentage for the new model's context window
       const currentUsage = tab.state.usage;
       if (currentUsage) {
         const newContextWindow = getContextWindowSize(model, plugin.settings.show1MModel, plugin.settings.customContextLimits);
@@ -460,14 +468,41 @@ function initializeInputToolbar(tab: TabData, plugin: ClaudianPlugin): void {
         };
       }
     },
-    onThinkingBudgetChange: async (budget: ThinkingBudget) => {
-      plugin.settings.thinkingBudget = budget;
+    onReasoningChange: async (value) => {
+      const capabilities = getBackendCapabilities(resolveTabBackendId(tab, plugin));
+      const backendId = resolveTabBackendId(tab, plugin);
+
+      if (backendId === BACKEND_CODEX) {
+        if (plugin.settings.permissionMode === 'plan') {
+          plugin.settings.codexPlanModeReasoningEffort = value as typeof plugin.settings.codexPlanModeReasoningEffort;
+        } else {
+          plugin.settings.codexReasoningEffort = value as typeof plugin.settings.codexReasoningEffort;
+        }
+        await plugin.saveSettings();
+        updateTabBackendUI(tab, plugin);
+        return;
+      }
+
+      if (!capabilities.supportsThinkingBudget) {
+        return;
+      }
+
+      plugin.settings.thinkingBudget = value as ThinkingBudget;
       await plugin.saveSettings();
+      updateTabBackendUI(tab, plugin);
     },
     onPermissionModeChange: async (mode) => {
+      const previousMode = plugin.settings.permissionMode;
+      if (mode === 'plan' && previousMode !== 'plan' && tab.state.prePlanPermissionMode === null) {
+        tab.state.prePlanPermissionMode = previousMode;
+      }
+      if (previousMode === 'plan' && mode !== 'plan') {
+        tab.state.prePlanPermissionMode = null;
+      }
+
       plugin.settings.permissionMode = mode;
       await plugin.saveSettings();
-      dom.inputWrapper.toggleClass('claudian-input-plan-mode', mode === 'plan');
+      updateTabBackendUI(tab, plugin);
     },
   });
 
@@ -501,7 +536,134 @@ function initializeInputToolbar(tab: TabData, plugin: ClaudianPlugin): void {
     await plugin.saveSettings();
   });
 
-  dom.inputWrapper.toggleClass('claudian-input-plan-mode', plugin.settings.permissionMode === 'plan');
+  updateTabBackendUI(tab, plugin);
+}
+
+function buildCodexModelOptions(plugin: ClaudianPlugin): ToolbarModelOption[] {
+  const options: ToolbarModelOption[] = [
+    {
+      value: '',
+      label: 'Default',
+      description: 'Use the Codex CLI default model.',
+    },
+  ];
+  const seen = new Set<string>(['']);
+  const configuredOptions = [
+    ...(plugin.settings.codexModelOptions ?? []),
+    plugin.settings.codexModel ?? '',
+  ];
+
+  for (const rawOption of configuredOptions) {
+    const value = rawOption.trim();
+    if (!value || seen.has(value)) {
+      continue;
+    }
+
+    seen.add(value);
+    options.push({
+      value,
+      label: value,
+      description: 'Use ' + value,
+    });
+  }
+
+  return options;
+}
+
+function buildToolbarSettings(tab: TabData, plugin: ClaudianPlugin) {
+  const backendId = resolveTabBackendId(tab, plugin);
+  const capabilities = getBackendCapabilities(backendId);
+  const permissionMode = !capabilities.supportsPlanMode && plugin.settings.permissionMode === 'plan'
+    ? 'normal'
+    : plugin.settings.permissionMode;
+
+  if (backendId === BACKEND_CODEX) {
+    return {
+      backendId,
+      model: plugin.settings.codexModel?.trim() ?? '',
+      modelOptions: buildCodexModelOptions(plugin),
+      codexReasoningEffort: plugin.settings.codexReasoningEffort ?? '',
+      codexPlanModeReasoningEffort: plugin.settings.codexPlanModeReasoningEffort ?? '',
+      prePlanPermissionMode: tab.state.prePlanPermissionMode === 'plan'
+        ? null
+        : tab.state.prePlanPermissionMode,
+      permissionMode,
+    };
+  }
+
+  return {
+    backendId,
+    model: plugin.settings.model,
+    thinkingBudget: plugin.settings.thinkingBudget,
+    permissionMode,
+    show1MModel: plugin.settings.show1MModel,
+  };
+}
+
+function resolveTabBackendId(tab: TabData, plugin: ClaudianPlugin): BackendId {
+  if (tab.conversationId) {
+    return normalizeBackendId(
+      plugin.getConversationSync(tab.conversationId)?.backendId
+        ?? tab.service?.getBackendId?.()
+        ?? plugin.settings.defaultBackend,
+      BACKEND_CLAUDE,
+    );
+  }
+
+  const serviceBackendId = tab.service?.getBackendId?.();
+  if (serviceBackendId) {
+    return normalizeBackendId(serviceBackendId, BACKEND_CLAUDE);
+  }
+
+  return normalizeBackendId(plugin.settings.defaultBackend, BACKEND_CLAUDE);
+}
+
+export function updateTabBackendBadge(tab: TabData, plugin: ClaudianPlugin): void {
+  const badgeEl = tab.dom.backendBadgeEl;
+  if (!badgeEl) {
+    return;
+  }
+
+  const backendId = resolveTabBackendId(tab, plugin);
+  const displayName = getBackendCapabilities(backendId).displayName;
+  const label = backendId === BACKEND_CODEX ? 'Codex' : 'Claude';
+
+  badgeEl.setText(label);
+  badgeEl.dataset.backendId = backendId;
+  badgeEl.setAttribute('title', 'Current backend: ' + displayName);
+  badgeEl.toggleClass('is-codex', backendId === BACKEND_CODEX);
+  badgeEl.toggleClass('is-claude', backendId === BACKEND_CLAUDE);
+}
+
+export function updateTabBackendUI(tab: TabData, plugin: ClaudianPlugin): void {
+  const capabilities = getBackendCapabilities(resolveTabBackendId(tab, plugin));
+
+  updateTabBackendBadge(tab, plugin);
+  tab.ui.modelSelector?.setVisible(capabilities.supportsModelSelection);
+  tab.ui.modelSelector?.updateDisplay();
+  tab.ui.modelSelector?.renderOptions();
+  const showReasoningSelector = capabilities.supportsThinkingBudget || capabilities.supportsReasoningEffort;
+  tab.ui.thinkingBudgetSelector?.setVisible(showReasoningSelector);
+  if (showReasoningSelector) {
+    tab.ui.thinkingBudgetSelector?.updateDisplay();
+  }
+  tab.ui.mcpServerSelector?.setVisible(capabilities.supportsMcp);
+
+  const hiddenCommands = new Set(
+    (plugin.settings.hiddenSlashCommands || []).map(command => command.toLowerCase())
+  );
+  const builtinHiddenCommands = new Set<string>();
+  if (!capabilities.supportsFork) {
+    builtinHiddenCommands.add('fork');
+  }
+  tab.ui.slashCommandDropdown?.setHiddenCommands(hiddenCommands);
+  tab.ui.slashCommandDropdown?.setBuiltinHiddenCommands(builtinHiddenCommands);
+
+  tab.ui.permissionToggle?.updateDisplay?.();
+  tab.dom.inputWrapper.toggleClass(
+    'claudian-input-plan-mode',
+    capabilities.supportsPlanMode && plugin.settings.permissionMode === 'plan',
+  );
 }
 
 export interface InitializeTabUIOptions {
@@ -572,6 +734,7 @@ export function initializeTabUI(
 }
 
 export interface ForkContext {
+  backendId?: BackendId;
   messages: ChatMessage[];
   sourceSessionId: string;
   resumeAt: string;
@@ -595,6 +758,7 @@ function countUserMessagesForForkTitle(messages: ChatMessage[]): number {
 }
 
 interface ForkSource {
+  sourceBackendId: BackendId;
   sourceSessionId: string;
   sourceTitle?: string;
   currentNote?: string;
@@ -607,10 +771,12 @@ interface ForkSource {
  */
 function resolveForkSource(tab: TabData, plugin: ClaudianPlugin): ForkSource | null {
   let sourceSessionId = tab.service?.getSessionId() ?? null;
+  let sourceBackendId = tab.service?.getBackendId?.() ?? plugin.settings.defaultBackend;
 
   if (!sourceSessionId && tab.conversationId) {
     const conversation = plugin.getConversationSync(tab.conversationId);
     sourceSessionId = conversation?.sdkSessionId ?? conversation?.sessionId ?? conversation?.forkSource?.sessionId ?? null;
+    sourceBackendId = conversation?.backendId ?? sourceBackendId;
   }
 
   if (!sourceSessionId) {
@@ -623,6 +789,7 @@ function resolveForkSource(tab: TabData, plugin: ClaudianPlugin): ForkSource | n
     : undefined;
 
   return {
+    sourceBackendId,
     sourceSessionId,
     sourceTitle: sourceConversation?.title,
     currentNote: sourceConversation?.currentNote,
@@ -636,6 +803,11 @@ async function handleForkRequest(
   forkRequestCallback: (forkContext: ForkContext) => Promise<void>,
 ): Promise<void> {
   const { state } = tab;
+
+  if (!getBackendCapabilities(resolveTabBackendId(tab, plugin)).supportsFork) {
+    new Notice('Fork not available.');
+    return;
+  }
 
   if (state.isStreaming) {
     new Notice(t('chat.fork.unavailableStreaming'));
@@ -665,6 +837,7 @@ async function handleForkRequest(
 
   await forkRequestCallback({
     messages: deepCloneMessages(msgs.slice(0, userIdx)),
+    backendId: source.sourceBackendId,
     sourceSessionId: source.sourceSessionId,
     resumeAt: rewindCtx.prevAssistantUuid,
     sourceTitle: source.sourceTitle,
@@ -679,6 +852,11 @@ async function handleForkAll(
   forkRequestCallback: (forkContext: ForkContext) => Promise<void>,
 ): Promise<void> {
   const { state } = tab;
+
+  if (!getBackendCapabilities(resolveTabBackendId(tab, plugin)).supportsFork) {
+    new Notice('Fork not available.');
+    return;
+  }
 
   if (state.isStreaming) {
     new Notice(t('chat.fork.unavailableStreaming'));
@@ -709,6 +887,7 @@ async function handleForkAll(
 
   await forkRequestCallback({
     messages: deepCloneMessages(msgs),
+    backendId: source.sourceBackendId,
     sourceSessionId: source.sourceSessionId,
     resumeAt: lastAssistantUuid,
     sourceTitle: source.sourceTitle,
@@ -736,6 +915,7 @@ export function initializeTabControllers(
     forkRequestCallback
       ? (id) => handleForkRequest(tab, plugin, id, forkRequestCallback)
       : undefined,
+    () => resolveTabBackendId(tab, plugin),
   );
 
   // Selection controller
@@ -829,6 +1009,9 @@ export function initializeTabControllers(
       getTitleGenerationService: () => services.titleGenerationService,
       getStatusPanel: () => ui.statusPanel,
       getAgentService: () => tab.service, // Use tab's service instead of plugin's
+      recreateAgentService: async (backendId) => {
+        await recreateTabService(tab, plugin, mcpManager, backendId);
+      },
     },
     {}
   );
@@ -1068,6 +1251,22 @@ export function deactivateTab(tab: TabData): void {
  * Cleans up a tab and releases all resources.
  * Made async to ensure proper cleanup ordering.
  */
+export async function recreateTabService(
+  tab: TabData,
+  plugin: ClaudianPlugin,
+  mcpManager: McpServerManager,
+  backendIdOverride?: BackendId,
+): Promise<void> {
+  tab.service?.closePersistentQuery('backend changed');
+  tab.service?.cleanup();
+  tab.service = null;
+  tab.serviceInitialized = false;
+
+  await initializeTabService(tab, plugin, mcpManager, backendIdOverride);
+  setupServiceCallbacks(tab, plugin);
+  updateTabBackendUI(tab, plugin);
+}
+
 export async function destroyTab(tab: TabData): Promise<void> {
   // Stop polling
   tab.controllers.selectionController?.stop();
@@ -1191,6 +1390,5 @@ export function setupServiceCallbacks(tab: TabData, plugin: ClaudianPlugin): voi
 export function updatePlanModeUI(tab: TabData, plugin: ClaudianPlugin, mode: PermissionMode): void {
   plugin.settings.permissionMode = mode;
   void plugin.saveSettings();
-  tab.ui.permissionToggle?.updateDisplay();
-  tab.dom.inputWrapper.toggleClass('claudian-input-plan-mode', mode === 'plan');
+  updateTabBackendUI(tab, plugin);
 }

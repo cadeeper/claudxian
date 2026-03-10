@@ -1,6 +1,6 @@
 import type { Component, WorkspaceLeaf } from 'obsidian';
 
-import type { ClaudianService } from '../../../core/agent';
+import type { AgentSessionService } from '../../../core/agent';
 import type { SlashCommandDropdown } from '../../../shared/components/SlashCommandDropdown';
 import type {
   BrowserSelectionController,
@@ -35,7 +35,7 @@ import type { NavigationSidebar } from '../ui';
  * Default number of tabs allowed.
  *
  * Set to 3 to balance usability with resource usage:
- * - Each tab has its own ClaudianService and persistent query
+ * - Each tab has its own AgentSessionService and persistent query
  * - More tabs = more memory and potential SDK processes
  * - 3 tabs allows multi-tasking without excessive overhead
  */
@@ -154,6 +154,9 @@ export interface TabDOMElements {
   inputWrapper: HTMLElement;
   inputEl: HTMLTextAreaElement;
 
+  /** Current backend badge shown in the input toolbar. */
+  backendBadgeEl: HTMLElement | null;
+
   /** Nav row for tab badges and header icons (above input wrapper). */
   navRowEl: HTMLElement;
 
@@ -179,8 +182,8 @@ export interface TabData {
   /** Conversation ID bound to this tab (null for new/empty tabs). */
   conversationId: string | null;
 
-  /** Per-tab ClaudianService instance for independent streaming. */
-  service: ClaudianService | null;
+  /** Per-tab AgentSessionService instance for independent streaming. */
+  service: AgentSessionService | null;
 
   /** Whether the service has been initialized (lazy start). */
   serviceInitialized: boolean;

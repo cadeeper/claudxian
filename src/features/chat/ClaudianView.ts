@@ -1,7 +1,7 @@
 import type { EventRef, WorkspaceLeaf } from 'obsidian';
 import { ItemView, Notice, setIcon } from 'obsidian';
 
-import { VIEW_TYPE_CLAUDIAN } from '../../core/types';
+import { BACKEND_CLAUDE, BACKEND_CODEX, getBackendCapabilities, normalizeBackendId, VIEW_TYPE_CLAUDIAN } from '../../core/types';
 import type ClaudianPlugin from '../../main';
 import { LOGO_SVG } from './constants';
 import { TabBar, TabManager, updatePlanModeUI } from './tabs';
@@ -23,6 +23,7 @@ export class ClaudianView extends ItemView {
   private titleSlotEl: HTMLElement | null = null;
   private logoEl: HTMLElement | null = null;
   private titleTextEl: HTMLElement | null = null;
+  private backendBadgeEl: HTMLElement | null = null;
   private headerActionsEl: HTMLElement | null = null;
   private headerActionsContent: HTMLElement | null = null;
 
@@ -70,7 +71,7 @@ export class ClaudianView extends ItemView {
   }
 
   getDisplayText(): string {
-    return 'Claudian';
+    return 'Claudxian';
   }
 
   getIcon(): string {
@@ -136,22 +137,26 @@ export class ClaudianView extends ItemView {
         onTabCreated: () => {
           this.updateTabBar();
           this.updateNavRowLocation();
+          this.refreshBackendBadge();
           this.persistTabState();
         },
         onTabSwitched: () => {
           this.updateTabBar();
           this.updateHistoryDropdown();
           this.updateNavRowLocation();
+          this.refreshBackendBadge();
           this.persistTabState();
         },
         onTabClosed: () => {
           this.updateTabBar();
+          this.refreshBackendBadge();
           this.persistTabState();
         },
         onTabStreamingChanged: () => this.updateTabBar(),
         onTabTitleChanged: () => this.updateTabBar(),
         onTabAttentionChanged: () => this.updateTabBar(),
         onTabConversationChanged: () => {
+          this.refreshBackendBadge();
           this.persistTabState();
         },
       }
@@ -165,6 +170,7 @@ export class ClaudianView extends ItemView {
 
     // Apply initial layout based on tabBarPosition setting
     this.updateLayoutForPosition();
+    this.refreshBackendBadge();
   }
 
   async onClose() {
@@ -216,16 +222,20 @@ export class ClaudianView extends ItemView {
     this.logoEl.appendChild(svg);
 
     // Title text (hidden in header mode when 2+ tabs)
-    this.titleTextEl = this.titleSlotEl.createEl('h4', { text: 'Claudian', cls: 'claudian-title-text' });
+    this.titleTextEl = this.titleSlotEl.createEl('h4', { text: 'Claudxian', cls: 'claudian-title-text' });
+    this.backendBadgeEl = this.titleSlotEl.createDiv({
+      cls: 'claudian-backend-badge claudian-header-backend-badge',
+      text: 'Claude',
+    });
 
-    // Header actions container (for header mode - initially hidden)
+    // Header actions container (stays in the top header across layouts)
     this.headerActionsEl = header.createDiv({ cls: 'claudian-header-actions claudian-header-actions-slot' });
-    this.headerActionsEl.style.display = 'none';
+    this.headerActionsEl.style.display = 'flex';
   }
 
   /**
-   * Builds the nav row content (tab badges + header actions).
-   * This is called once and the content is moved between locations.
+   * Builds the nav row content (tab badges only).
+   * Header actions stay in the top header so overlays are not clipped by the input area.
    */
   private buildNavRowContent(): HTMLElement {
     // Create a fragment to hold nav row content
@@ -275,8 +285,6 @@ export class ClaudianView extends ItemView {
       this.toggleHistoryDropdown();
     });
 
-    fragment.appendChild(this.headerActionsContent);
-
     // Create a wrapper div to hold the fragment (for input mode nav row)
     const wrapper = document.createElement('div');
     wrapper.style.display = 'contents';
@@ -285,37 +293,30 @@ export class ClaudianView extends ItemView {
   }
 
   /**
-   * Moves nav row content based on tabBarPosition setting.
-   * - 'input' mode: Both tab badges and actions go to active tab's navRowEl
-   * - 'header' mode: Tab badges go to title slot (after logo), actions go to header right side
+   * Moves tab badges based on tabBarPosition.
+   * Header actions always stay in the top header to keep dropdowns unobstructed.
    */
   private updateNavRowLocation(): void {
     if (!this.tabBarContainerEl || !this.headerActionsContent) return;
 
+    if (this.headerActionsEl) {
+      this.headerActionsEl.appendChild(this.headerActionsContent);
+      this.headerActionsEl.style.display = 'flex';
+    }
+
     const isHeaderMode = this.plugin.settings.tabBarPosition === 'header';
 
     if (isHeaderMode) {
-      // Header mode: Tab badges go to title slot, actions go to header right side
       if (this.titleSlotEl) {
         this.titleSlotEl.appendChild(this.tabBarContainerEl);
       }
-      if (this.headerActionsEl) {
-        this.headerActionsEl.appendChild(this.headerActionsContent);
-        this.headerActionsEl.style.display = 'flex';
-      }
-    } else {
-      // Input mode: Both go to active tab's navRowEl via the wrapper
-      const activeTab = this.tabManager?.getActiveTab();
-      if (activeTab && this.navRowContent) {
-        // Re-assemble the nav row content wrapper
-        this.navRowContent.appendChild(this.tabBarContainerEl);
-        this.navRowContent.appendChild(this.headerActionsContent);
-        activeTab.dom.navRowEl.appendChild(this.navRowContent);
-      }
-      // Hide header actions slot when in input mode
-      if (this.headerActionsEl) {
-        this.headerActionsEl.style.display = 'none';
-      }
+      return;
+    }
+
+    const activeTab = this.tabManager?.getActiveTab();
+    if (activeTab && this.navRowContent) {
+      this.navRowContent.appendChild(this.tabBarContainerEl);
+      activeTab.dom.navRowEl.appendChild(this.navRowContent);
     }
   }
 
@@ -401,6 +402,34 @@ export class ClaudianView extends ItemView {
     if (this.titleTextEl) {
       this.titleTextEl.style.display = hideBranding ? 'none' : '';
     }
+  }
+
+
+  refreshBackendBadge(): void {
+    if (!this.backendBadgeEl) {
+      return;
+    }
+
+    const activeTab = this.tabManager?.getActiveTab();
+    const backendId = activeTab?.conversationId
+      ? normalizeBackendId(
+          this.plugin.getConversationSync(activeTab.conversationId)?.backendId
+            ?? activeTab.service?.getBackendId?.()
+            ?? this.plugin.settings.defaultBackend,
+          BACKEND_CLAUDE,
+        )
+      : normalizeBackendId(
+          activeTab?.service?.getBackendId?.() ?? this.plugin.settings.defaultBackend,
+          BACKEND_CLAUDE,
+        );
+
+    const label = backendId === BACKEND_CODEX ? 'Codex' : 'Claude';
+    const displayName = getBackendCapabilities(backendId).displayName;
+    this.backendBadgeEl.setText(label);
+    this.backendBadgeEl.dataset.backendId = backendId;
+    this.backendBadgeEl.setAttribute('title', 'Current backend: ' + displayName);
+    this.backendBadgeEl.toggleClass('is-codex', backendId === BACKEND_CODEX);
+    this.backendBadgeEl.toggleClass('is-claude', backendId === BACKEND_CLAUDE);
   }
 
   // ============================================

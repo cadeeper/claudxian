@@ -2,6 +2,7 @@
  * Chat and conversation type definitions.
  */
 
+import type { BackendId } from './backend';
 import type { SDKToolUseResult } from './diff';
 import type { SubagentInfo, SubagentMode, ToolCallInfo } from './tools';
 
@@ -12,7 +13,7 @@ export interface ForkSource {
 }
 
 /** View type identifier for Obsidian. */
-export const VIEW_TYPE_CLAUDIAN = 'claudian-view';
+export const VIEW_TYPE_CLAUDIAN = 'claudxian-view';
 
 /** Supported image media types for attachments. */
 export type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
@@ -66,6 +67,8 @@ export interface ChatMessage {
 
 /** Persisted conversation with messages and session state. */
 export interface Conversation {
+  /** Legacy conversations may omit backendId; they are normalized to Claude on load. */
+  backendId?: BackendId;
   id: string;
   title: string;
   createdAt: number;
@@ -114,6 +117,7 @@ export interface Conversation {
 
 /** Lightweight conversation metadata for the history dropdown. */
 export interface ConversationMeta {
+  backendId?: BackendId;
   id: string;
   title: string;
   createdAt: number;
@@ -134,6 +138,7 @@ export interface ConversationMeta {
  * SDK handles message storage; this stores UI-only state.
  */
 export interface SessionMetadata {
+  backendId?: BackendId;
   id: string;
   title: string;
   titleGenerationStatus?: 'pending' | 'success' | 'failed';

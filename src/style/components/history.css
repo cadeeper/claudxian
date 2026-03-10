@@ -2,19 +2,19 @@
   position: relative;
 }
 
-/* History dropup menu (opens upward since it's at bottom of view) */
+/* History dropdown (anchored to the header actions) */
 .claudian-history-menu {
   display: none;
   position: absolute;
-  bottom: 100%;
+  top: 100%;
   inset-inline-end: 0;
-  margin-bottom: 4px;
+  margin-top: 4px;
   background: var(--background-secondary);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--background-modifier-border);
   border-radius: 6px;
-  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
   z-index: 1000;
   max-height: 400px;
   overflow: hidden;
@@ -23,15 +23,6 @@
 
 .claudian-history-menu.visible {
   display: block;
-}
-
-/* Header mode: dropdown instead of dropup */
-.claudian-container--header-mode .claudian-history-menu {
-  bottom: auto;
-  top: 100%;
-  margin-bottom: 0;
-  margin-top: 4px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
 }
 
 .claudian-history-header {

@@ -54,3 +54,39 @@
   transform: translateX(14px);
   background: var(--claudian-brand);
 }
+
+.claudian-permission-select {
+  min-width: 68px;
+  height: 24px;
+  padding: 0 22px 0 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.claudian-permission-select:hover {
+  background: var(--background-modifier-hover);
+}
+
+.claudian-permission-select:focus {
+  outline: none;
+  border-color: rgba(var(--claudian-brand-rgb), 0.45);
+  box-shadow: 0 0 0 2px rgba(var(--claudian-brand-rgb), 0.12);
+}
+
+
+.claudian-permission-toggle--codex .claudian-permission-select {
+  height: 22px;
+  padding: 0 18px 0 7px;
+}
+
+.claudian-permission-select--mode {
+  min-width: 66px;
+}
+
+.claudian-permission-select--access {
+  min-width: 58px;
+}

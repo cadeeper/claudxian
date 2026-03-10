@@ -109,6 +109,18 @@
   padding: 4px 6px 6px 6px;
 }
 
+
+.claudian-permission-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.claudian-permission-toggle--codex {
+  gap: 6px;
+  padding-left: 8px;
+}
+
 /* File indicator (attached files) */
 .claudian-file-indicator {
   display: none;

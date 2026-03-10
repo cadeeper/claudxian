@@ -88,6 +88,65 @@ export function normalizeArgumentHint(hint: string): string {
   return `[${hint}]`;
 }
 
+
+export interface SlashCommandInvocation {
+  name: string;
+  argsText: string;
+  args: string[];
+}
+
+const SLASH_INVOCATION_REGEX = /^\/([a-zA-Z0-9_-]+)(?:\s+([\s\S]*))?$/;
+const SLASH_ARGUMENT_TOKEN_REGEX = /"((?:\\.|[^"])*)"|'((?:\\.|[^'])*)'|`((?:\\.|[^`])*)`|(\S+)/g;
+
+function decodeSlashArgument(value: string): string {
+  return value.replace(/\\(["'`])/g, '$1');
+}
+
+export function parseSlashCommandInvocation(input: string): SlashCommandInvocation | null {
+  const trimmed = input.trim();
+  const match = trimmed.match(SLASH_INVOCATION_REGEX);
+  if (!match) {
+    return null;
+  }
+
+  const argsText = (match[2] || '').trim();
+  const args: string[] = [];
+
+  if (argsText) {
+    for (const tokenMatch of argsText.matchAll(SLASH_ARGUMENT_TOKEN_REGEX)) {
+      const token = tokenMatch[1] ?? tokenMatch[2] ?? tokenMatch[3] ?? tokenMatch[4] ?? '';
+      if (token) {
+        args.push(decodeSlashArgument(token));
+      }
+    }
+
+    if (args.length === 0) {
+      args.push(...argsText.split(/\s+/).filter(Boolean));
+    }
+  }
+
+  return {
+    name: match[1],
+    argsText,
+    args,
+  };
+}
+
+export function expandSlashCommandTemplate(template: string, invocation: SlashCommandInvocation): string {
+  return template.replace(/\$(ARGUMENTS|\d+)/g, (_match, placeholder: string) => {
+    if (placeholder === 'ARGUMENTS') {
+      return invocation.argsText;
+    }
+
+    const index = Number.parseInt(placeholder, 10);
+    if (!Number.isFinite(index) || index < 1) {
+      return '';
+    }
+
+    return invocation.args[index - 1] ?? '';
+  });
+}
+
 export function yamlString(value: string): string {
   if (value.includes(':') || value.includes('#') || value.includes('\n') ||
       value.startsWith(' ') || value.endsWith(' ') ||

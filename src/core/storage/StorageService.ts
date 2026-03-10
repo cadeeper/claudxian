@@ -3,7 +3,7 @@
  *
  * Manages:
  * - CC settings in .claude/settings.json (CC-compatible, shareable)
- * - Claudian settings in .claude/claudian-settings.json (Claudian-specific)
+ * - Claudian settings in .claude/claudxian-settings.json (Claudian-specific)
  * - Slash commands in .claude/commands/*.md
  * - Chat sessions in .claude/sessions/*.jsonl
  * - MCP configs in .claude/mcp.json

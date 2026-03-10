@@ -53,6 +53,7 @@ import {
 import { TOOL_ASK_USER_QUESTION, TOOL_ENTER_PLAN_MODE, TOOL_EXIT_PLAN_MODE, TOOL_SKILL } from '../tools/toolNames';
 import type {
   ApprovalDecision,
+  BackendCapabilities,
   ChatMessage,
   Conversation,
   ExitPlanModeCallback,
@@ -62,7 +63,8 @@ import type {
   SlashCommand,
   StreamChunk,
 } from '../types';
-import { resolveModelWithBetas, THINKING_BUDGETS } from '../types';
+import { BACKEND_CLAUDE, getBackendCapabilities, resolveModelWithBetas, THINKING_BUDGETS } from '../types';
+import type { AgentSessionService } from './AgentSessionService';
 import { MessageChannel } from './MessageChannel';
 import {
   type ColdStartQueryContext,
@@ -124,7 +126,7 @@ export interface EnsureReadyOptions {
   preserveHandlers?: boolean;
 }
 
-export class ClaudianService {
+export class ClaudianService implements AgentSessionService {
   private plugin: ClaudianPlugin;
   private abortController: AbortController | null = null;
   private approvalCallback: ApprovalCallback | null = null;
@@ -166,6 +168,14 @@ export class ClaudianService {
   constructor(plugin: ClaudianPlugin, mcpManager: McpServerManager) {
     this.plugin = plugin;
     this.mcpManager = mcpManager;
+  }
+
+  getBackendId(): 'claude' {
+    return 'claude';
+  }
+
+  getBackendCapabilities(): BackendCapabilities {
+    return getBackendCapabilities(BACKEND_CLAUDE);
   }
 
   onReadyStateChange(listener: (ready: boolean) => void): () => void {

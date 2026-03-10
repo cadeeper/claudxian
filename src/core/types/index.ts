@@ -1,3 +1,16 @@
+// Backend types
+export {
+  BACKEND_CLAUDE,
+  BACKEND_CODEX,
+  type BackendCapabilities,
+  type BackendId,
+  DEFAULT_BACKEND_ID,
+  getBackendCapabilities,
+  getSupportedBackends,
+  isBackendId,
+  normalizeBackendId,
+} from './backend';
+
 // Chat types
 export {
   type ChatMessage,
@@ -39,6 +52,10 @@ export {
   type CCSettings,
   type ClaudianSettings,
   type CliPlatformKey,
+  CODEX_PLAN_REASONING_EFFORTS,
+  CODEX_REASONING_EFFORTS,
+  type CodexPlanModeReasoningEffort,
+  type CodexReasoningEffort,
   createPermissionRule,
   DEFAULT_CC_PERMISSIONS,
   DEFAULT_CC_SETTINGS,

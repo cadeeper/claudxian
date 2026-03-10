@@ -36,6 +36,7 @@ export interface SlashCommandDropdownCallbacks {
 export interface SlashCommandDropdownOptions {
   fixed?: boolean;
   hiddenCommands?: Set<string>;
+  builtinHiddenCommands?: Set<string>;
 }
 
 export class SlashCommandDropdown {
@@ -50,6 +51,7 @@ export class SlashCommandDropdown {
   private filteredCommands: SlashCommand[] = [];
   private isFixed: boolean;
   private hiddenCommands: Set<string>;
+  private builtinHiddenCommands: Set<string>;
 
   // SDK skills cache
   private cachedSdkSkills: SlashCommand[] = [];
@@ -69,6 +71,7 @@ export class SlashCommandDropdown {
     this.callbacks = callbacks;
     this.isFixed = options.fixed ?? false;
     this.hiddenCommands = options.hiddenCommands ?? new Set();
+    this.builtinHiddenCommands = options.builtinHiddenCommands ?? new Set();
 
     this.onInput = () => this.handleInputChange();
     this.inputEl.addEventListener('input', this.onInput);
@@ -83,6 +86,10 @@ export class SlashCommandDropdown {
 
   setHiddenCommands(commands: Set<string>): void {
     this.hiddenCommands = commands;
+  }
+
+  setBuiltinHiddenCommands(commands: Set<string>): void {
+    this.builtinHiddenCommands = commands;
   }
 
   handleInputChange(): void {
@@ -236,21 +243,21 @@ export class SlashCommandDropdown {
 
   /**
    * Builds the merged command list from built-in and SDK commands.
-   * Built-in commands have highest priority and are not subject to hiding.
-   * SDK commands are deduplicated, filtered, and respect user hiding.
+   * Built-in commands have highest priority and can be hidden only by
+   * backend capability rules. SDK commands respect user hidden commands.
    */
   private buildCommandList(builtInCommands: SlashCommand[]): SlashCommand[] {
     const seenNames = new Set<string>();
     const allCommands: SlashCommand[] = [];
 
     // Add Claudian built-in commands first (highest priority)
-    // Built-in commands are not subject to user hiding (they are essential UI actions)
     for (const cmd of builtInCommands) {
       const nameLower = cmd.name.toLowerCase();
-      if (!seenNames.has(nameLower)) {
-        seenNames.add(nameLower);
-        allCommands.push(cmd);
+      if (this.builtinHiddenCommands.has(nameLower) || seenNames.has(nameLower)) {
+        continue;
       }
+      seenNames.add(nameLower);
+      allCommands.push(cmd);
     }
 
     for (const cmd of this.cachedSdkSkills) {

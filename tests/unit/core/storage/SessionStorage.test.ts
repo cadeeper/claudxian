@@ -1,6 +1,7 @@
 import { SESSIONS_PATH,SessionStorage } from '@/core/storage/SessionStorage';
 import type { VaultFileAdapter } from '@/core/storage/VaultFileAdapter';
 import type { Conversation, SessionMetadata, UsageInfo } from '@/core/types';
+import { BACKEND_CLAUDE } from '@/core/types';
 
 describe('SessionStorage', () => {
   let mockAdapter: jest.Mocked<VaultFileAdapter>;
@@ -54,6 +55,7 @@ describe('SessionStorage', () => {
       const result = await storage.loadConversation('conv-123');
 
       expect(result).toEqual({
+        backendId: BACKEND_CLAUDE,
         id: 'conv-123',
         title: 'Test Chat',
         createdAt: 1700000000,
@@ -171,6 +173,7 @@ describe('SessionStorage', () => {
   describe('saveConversation', () => {
     it('serializes conversation to JSONL and writes to file', async () => {
       const conversation: Conversation = {
+        backendId: BACKEND_CLAUDE,
         id: 'conv-456',
         title: 'Save Test',
         createdAt: 1700000000,
@@ -196,6 +199,7 @@ describe('SessionStorage', () => {
 
       const meta = JSON.parse(lines[0]);
       expect(meta.type).toBe('meta');
+      expect(meta.backendId).toBe(BACKEND_CLAUDE);
       expect(meta.id).toBe('conv-456');
       expect(meta.title).toBe('Save Test');
 
@@ -210,6 +214,7 @@ describe('SessionStorage', () => {
 
     it('preserves base64 image data when saving', async () => {
       const conversation: Conversation = {
+        backendId: BACKEND_CLAUDE,
         id: 'conv-img',
         title: 'Image Test',
         createdAt: 1700000000,
@@ -248,6 +253,7 @@ describe('SessionStorage', () => {
 
     it('handles messages without images', async () => {
       const conversation: Conversation = {
+        backendId: BACKEND_CLAUDE,
         id: 'conv-no-img',
         title: 'No Image Test',
         createdAt: 1700000000,
@@ -284,6 +290,7 @@ describe('SessionStorage', () => {
       };
 
       const conversation: Conversation = {
+        backendId: BACKEND_CLAUDE,
         id: 'conv-meta',
         title: 'Meta Test',
         createdAt: 1700000000,
@@ -609,6 +616,7 @@ describe('SessionStorage', () => {
   describe('saveMetadata', () => {
     it('serializes metadata to JSON and writes to file', async () => {
       const metadata: SessionMetadata = {
+        backendId: BACKEND_CLAUDE,
         id: 'session-456',
         title: 'Test Session',
         createdAt: 1700000000,
@@ -646,6 +654,7 @@ describe('SessionStorage', () => {
       };
 
       const metadata: SessionMetadata = {
+        backendId: BACKEND_CLAUDE,
         id: 'session-full',
         title: 'Full Test',
         createdAt: 1700000000,
@@ -961,6 +970,7 @@ describe('SessionStorage', () => {
   describe('toSessionMetadata - extractSubagentData', () => {
     it('extracts subagent data from Task toolCalls', () => {
       const conversation: Conversation = {
+        backendId: BACKEND_CLAUDE,
         id: 'conv-subagent',
         title: 'Subagent Test',
         createdAt: 1700000000,
@@ -1006,6 +1016,7 @@ describe('SessionStorage', () => {
 
     it('returns undefined subagentData when no subagents present', () => {
       const conversation: Conversation = {
+        backendId: BACKEND_CLAUDE,
         id: 'conv-no-subagent',
         title: 'No Subagent',
         createdAt: 1700000000,
@@ -1024,6 +1035,7 @@ describe('SessionStorage', () => {
 
     it('ignores Task toolCalls without linked subagent', () => {
       const conversation: Conversation = {
+        backendId: BACKEND_CLAUDE,
         id: 'conv-task-subagent',
         title: 'Task Subagent Test',
         createdAt: 1700000000,
@@ -1057,6 +1069,7 @@ describe('SessionStorage', () => {
   describe('toSessionMetadata - resumeSessionAt', () => {
     it('includes resumeSessionAt when set', () => {
       const conversation: Conversation = {
+        backendId: BACKEND_CLAUDE,
         id: 'conv-rewind',
         title: 'Rewind Test',
         createdAt: 1700000000,
@@ -1073,6 +1086,7 @@ describe('SessionStorage', () => {
 
     it('omits resumeSessionAt when not set', () => {
       const conversation: Conversation = {
+        backendId: BACKEND_CLAUDE,
         id: 'conv-no-rewind',
         title: 'No Rewind',
         createdAt: 1700000000,
@@ -1100,6 +1114,7 @@ describe('SessionStorage', () => {
       };
 
       const conversation: Conversation = {
+        backendId: BACKEND_CLAUDE,
         id: 'conv-convert',
         title: 'Convert Test',
         createdAt: 1700000000,
@@ -1140,6 +1155,7 @@ describe('SessionStorage', () => {
 
     it('includes forkSource when set', () => {
       const conversation: Conversation = {
+        backendId: BACKEND_CLAUDE,
         id: 'conv-fork',
         title: 'Fork Test',
         createdAt: 1700000000,
@@ -1159,6 +1175,7 @@ describe('SessionStorage', () => {
 
     it('omits forkSource when not set', () => {
       const conversation: Conversation = {
+        backendId: BACKEND_CLAUDE,
         id: 'conv-no-fork',
         title: 'No Fork',
         createdAt: 1700000000,

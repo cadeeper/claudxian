@@ -9,6 +9,7 @@ import type {
   ToolCallInfo
 } from '@/core/types';
 import {
+  BACKEND_CLAUDE,
   BETA_1M_CONTEXT,
   CONTEXT_WINDOW_1M,
   CONTEXT_WINDOW_STANDARD,
@@ -30,7 +31,7 @@ import {
 describe('types.ts', () => {
   describe('VIEW_TYPE_CLAUDIAN', () => {
     it('should be defined as the correct view type', () => {
-      expect(VIEW_TYPE_CLAUDIAN).toBe('claudian-view');
+      expect(VIEW_TYPE_CLAUDIAN).toBe('claudxian-view');
     });
   });
 
@@ -87,12 +88,24 @@ describe('types.ts', () => {
     it('should have lastCustomModel as empty string by default', () => {
       expect(DEFAULT_SETTINGS.lastCustomModel).toBe('');
     });
+
+    it('should default new conversations to the Claude backend', () => {
+      expect(DEFAULT_SETTINGS.defaultBackend).toBe(BACKEND_CLAUDE);
+    });
+
+    it('should initialize Codex model settings with empty defaults', () => {
+      expect(DEFAULT_SETTINGS.codexModel).toBe('');
+      expect(DEFAULT_SETTINGS.codexModelOptions).toEqual([]);
+      expect(DEFAULT_SETTINGS.codexReasoningEffort).toBe('');
+      expect(DEFAULT_SETTINGS.codexPlanModeReasoningEffort).toBe('');
+    });
   });
 
   describe('ClaudianSettings type', () => {
     it('should be assignable with valid settings', () => {
       const settings: ClaudianSettings = {
         userName: '',
+        defaultBackend: BACKEND_CLAUDE,
         enableBlocklist: false,
         blockedCommands: { unix: ['test'], windows: ['test-win'] },
         model: 'haiku',
@@ -132,6 +145,7 @@ describe('types.ts', () => {
     it('should accept custom model strings', () => {
       const settings: ClaudianSettings = {
         userName: '',
+        defaultBackend: BACKEND_CLAUDE,
         enableBlocklist: true,
         blockedCommands: { unix: [], windows: [] },
         model: 'anthropic/custom-model-v1',
@@ -169,6 +183,7 @@ describe('types.ts', () => {
     it('should accept optional lastClaudeModel and lastCustomModel', () => {
       const settings: ClaudianSettings = {
         userName: '',
+        defaultBackend: BACKEND_CLAUDE,
         enableBlocklist: true,
         blockedCommands: { unix: [], windows: [] },
         model: 'sonnet',
@@ -398,6 +413,7 @@ describe('types.ts', () => {
   describe('Conversation type', () => {
     it('should store conversation with all required fields', () => {
       const conversation: Conversation = {
+        backendId: BACKEND_CLAUDE,
         id: 'conv-123',
         title: 'Test Conversation',
         createdAt: 1700000000000,
@@ -416,6 +432,7 @@ describe('types.ts', () => {
 
     it('should allow null sessionId for new conversations', () => {
       const conversation: Conversation = {
+        backendId: BACKEND_CLAUDE,
         id: 'conv-456',
         title: 'New Chat',
         createdAt: Date.now(),
@@ -434,6 +451,7 @@ describe('types.ts', () => {
       ];
 
       const conversation: Conversation = {
+        backendId: BACKEND_CLAUDE,
         id: 'conv-789',
         title: 'Chat with Messages',
         createdAt: Date.now(),
@@ -451,6 +469,7 @@ describe('types.ts', () => {
   describe('ConversationMeta type', () => {
     it('should store conversation metadata without messages', () => {
       const meta: ConversationMeta = {
+        backendId: BACKEND_CLAUDE,
         id: 'conv-123',
         title: 'Test Conversation',
         createdAt: 1700000000000,
@@ -469,6 +488,7 @@ describe('types.ts', () => {
 
     it('should have preview for empty conversations', () => {
       const meta: ConversationMeta = {
+        backendId: BACKEND_CLAUDE,
         id: 'conv-empty',
         title: 'Empty Chat',
         createdAt: Date.now(),

@@ -1,5 +1,7 @@
 /* Header - logo, title/tabs slot, and actions */
 .claudian-header {
+  position: relative;
+  z-index: 2;
   display: flex;
   align-items: center;
   padding: 0 12px 12px 12px;
@@ -72,4 +74,30 @@
 .claudian-new-tab-btn svg {
   width: 16.8px;
   height: 16.8px;
+}
+
+.claudian-backend-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 999px;
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.claudian-header-backend-badge {
+  margin-left: 4px;
+}
+
+.claudian-backend-badge.is-codex {
+  color: var(--text-accent);
+}
+
+.claudian-backend-badge.is-claude {
+  color: var(--text-muted);
 }

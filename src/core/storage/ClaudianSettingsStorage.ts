@@ -1,7 +1,7 @@
 /**
  * ClaudianSettingsStorage - Handles claudian-settings.json read/write.
  *
- * Manages the .claude/claudian-settings.json file for Claudian-specific settings.
+ * Manages the .claude/claudxian-settings.json file for Claudian-specific settings.
  * These settings are NOT shared with Claude Code CLI.
  *
  * Includes:
@@ -20,12 +20,12 @@ import { DEFAULT_SETTINGS, getDefaultBlockedCommands } from '../types';
 import type { VaultFileAdapter } from './VaultFileAdapter';
 
 /** Path to Claudian settings file relative to vault root. */
-export const CLAUDIAN_SETTINGS_PATH = '.claude/claudian-settings.json';
+export const CLAUDIAN_SETTINGS_PATH = '.claude/claudxian-settings.json';
 
 /** Fields that are loaded separately (slash commands from .claude/commands/). */
 type SeparatelyLoadedFields = 'slashCommands';
 
-/** Settings stored in .claude/claudian-settings.json. */
+/** Settings stored in .claude/claudxian-settings.json. */
 export type StoredClaudianSettings = Omit<ClaudianSettings, SeparatelyLoadedFields>;
 
 function normalizeCommandList(value: unknown, fallback: string[]): string[] {
@@ -79,7 +79,7 @@ export class ClaudianSettingsStorage {
   constructor(private adapter: VaultFileAdapter) { }
 
   /**
-  * Load Claudian settings from .claude/claudian-settings.json.
+  * Load Claudian settings from .claude/claudxian-settings.json.
   * Returns default settings if file doesn't exist.
   * Throws if file exists but cannot be read or parsed.
   */

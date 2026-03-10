@@ -1,9 +1,9 @@
 import { Notice } from 'obsidian';
 
-import type { ApprovalCallbackOptions, ClaudianService } from '../../../core/agent';
-import { detectBuiltInCommand } from '../../../core/commands';
+import type { AgentSessionService, ApprovalCallbackOptions } from '../../../core/agent';
+import { detectBuiltInCommand, isCodexPassthroughCommand } from '../../../core/commands';
 import { TOOL_EXIT_PLAN_MODE } from '../../../core/tools/toolNames';
-import type { ApprovalDecision, ChatMessage, ExitPlanModeDecision } from '../../../core/types';
+import { type ApprovalDecision, BACKEND_CODEX, type BackendId, type ChatMessage, type ExitPlanModeDecision, type SlashCommand } from '../../../core/types';
 import type ClaudianPlugin from '../../../main';
 import { ResumeSessionDropdown } from '../../../shared/components/ResumeSessionDropdown';
 import { InstructionModal } from '../../../shared/modals/InstructionConfirmModal';
@@ -13,6 +13,7 @@ import { appendCurrentNote } from '../../../utils/context';
 import { formatDurationMmSs } from '../../../utils/date';
 import { appendEditorContext, type EditorSelectionContext } from '../../../utils/editor';
 import { appendMarkdownSnippet } from '../../../utils/markdown';
+import { expandSlashCommandTemplate, parseSlashCommandInvocation } from '../../../utils/slashCommand';
 import { COMPLETION_FLAVOR_WORDS } from '../constants';
 import { type InlineAskQuestionConfig, InlineAskUserQuestion } from '../rendering/InlineAskUserQuestion';
 import { InlineExitPlanMode } from '../rendering/InlineExitPlanMode';
@@ -35,6 +36,13 @@ const APPROVAL_OPTION_MAP: Record<string, ApprovalDecision> = {
   'Allow once': 'allow',
   'Always allow': 'allow-always',
 };
+
+
+interface CodexSlashResolution {
+  blockedNotice?: string;
+  prompt: string;
+  queryOptions?: QueryOptions;
+}
 
 export interface InputControllerDeps {
   plugin: ClaudianPlugin;
@@ -62,7 +70,7 @@ export interface InputControllerDeps {
   getInputContainerEl: () => HTMLElement;
   generateId: () => string;
   resetInputHeight: () => void;
-  getAgentService?: () => ClaudianService | null;
+  getAgentService?: () => AgentSessionService | null;
   getSubagentManager: () => SubagentManager;
   /** Returns true if ready. */
   ensureServiceInitialized?: () => Promise<boolean>;
@@ -82,7 +90,7 @@ export class InputController {
     this.deps = deps;
   }
 
-  private getAgentService(): ClaudianService | null {
+  private getAgentService(): AgentSessionService | null {
     return this.deps.getAgentService?.() ?? null;
   }
 
@@ -146,6 +154,14 @@ export class InputController {
       return;
     }
 
+    const codexSlashResolution = this.resolveActiveBackendId() === BACKEND_CODEX
+      ? this.resolveCodexSlashCommand(content)
+      : null;
+    if (codexSlashResolution?.blockedNotice) {
+      new Notice(codexSlashResolution.blockedNotice);
+      return;
+    }
+
     // If agent is working, queue the message instead of dropping it
     if (state.isStreaming) {
       const images = hasImages ? [...(imageContextManager?.getAttachedImages() || [])] : undefined;
@@ -199,10 +215,8 @@ export class InputController {
 
     fileContextManager?.startSession();
 
-    // Slash commands are passed directly to SDK for handling
-    // SDK handles expansion, $ARGUMENTS, @file references, and frontmatter options
     const displayContent = content;
-    let queryOptions: QueryOptions | undefined;
+    let queryOptions: QueryOptions | undefined = codexSlashResolution?.queryOptions;
 
     const images = imageContextManager?.getAttachedImages() || [];
     const imagesForMessage = images.length > 0 ? [...images] : undefined;
@@ -228,7 +242,7 @@ export class InputController {
     const isCompact = /^\/compact(\s|$)/i.test(content);
 
     // User content first, context XML appended after (enables slash command detection)
-    let promptToSend = content;
+    let promptToSend = codexSlashResolution?.prompt ?? content;
     let currentNoteForMessage: string | undefined;
 
     // SDK built-in commands (e.g., /compact) must be sent bare — context XML breaks detection
@@ -402,7 +416,7 @@ export class InputController {
       if (!wasInvalidated && state.streamGeneration === streamGeneration) {
         const didCancelThisTurn = wasInterrupted || state.cancelRequested;
         if (didCancelThisTurn && !state.pendingNewSessionPlan) {
-          await streamController.appendText('\n\n<span class="claudian-interrupted">Interrupted</span> <span class="claudian-interrupted-hint">· What should Claudian do instead?</span>');
+          await streamController.appendText('\n\n<span class="claudian-interrupted">Interrupted</span> <span class="claudian-interrupted-hint">· What should Claudxian do instead?</span>');
         }
         streamController.hideThinkingIndicator();
         state.isStreaming = false;
@@ -576,7 +590,10 @@ export class InputController {
 
     if (!state.currentConversationId) {
       const sessionId = this.getAgentService()?.getSessionId() ?? undefined;
-      const conversation = await plugin.createConversation(sessionId);
+      const conversation = await plugin.createConversation(
+        sessionId,
+        this.getAgentService()?.getBackendId?.() ?? plugin.settings.defaultBackend,
+      );
       state.currentConversationId = conversation.id;
     }
 
@@ -956,6 +973,63 @@ export class InputController {
       this.inputContainerHideDepth = 0;
       this.deps.getInputContainerEl().style.display = '';
     }
+  }
+
+  private resolveActiveBackendId(): BackendId {
+    const serviceBackendId = this.getAgentService()?.getBackendId();
+    if (serviceBackendId) {
+      return serviceBackendId;
+    }
+
+    const conversationId = this.deps.state.currentConversationId;
+    const conversation = conversationId
+      ? this.deps.plugin.getConversationSync(conversationId)
+      : null;
+
+    return conversation?.backendId ?? this.deps.plugin.settings.defaultBackend;
+  }
+
+  private resolveCodexSlashCommand(input: string): CodexSlashResolution | null {
+    const invocation = parseSlashCommandInvocation(input);
+    if (!invocation) {
+      return null;
+    }
+
+    if (isCodexPassthroughCommand(invocation.name)) {
+      return { prompt: input };
+    }
+
+    const command = this.findSlashCommand(invocation.name);
+    if (!command) {
+      return null;
+    }
+
+    if (command.userInvocable === false) {
+      return {
+        prompt: input,
+        blockedNotice: `/${command.name} cannot be invoked directly.`,
+      };
+    }
+
+    const queryOptions: QueryOptions = {};
+    const model = typeof command.model === 'string' ? command.model.trim() : '';
+    if (model) {
+      queryOptions.model = model;
+    }
+
+    if (command.allowedTools && command.allowedTools.length > 0) {
+      queryOptions.allowedTools = [...command.allowedTools];
+    }
+
+    return {
+      prompt: expandSlashCommandTemplate(command.content, invocation),
+      queryOptions: Object.keys(queryOptions).length > 0 ? queryOptions : undefined,
+    };
+  }
+
+  private findSlashCommand(name: string): SlashCommand | null {
+    const normalizedName = name.trim().toLowerCase();
+    return this.deps.plugin.settings.slashCommands.find((command) => command.name.toLowerCase() === normalizedName) ?? null;
   }
 
   // ============================================

@@ -143,7 +143,7 @@ describe('StorageService migration', () => {
     const storage = new StorageService(plugin);
     await storage.initialize();
 
-    const saved = JSON.parse(files.get('.claude/claudian-settings.json') || '{}') as Record<string, unknown>;
+    const saved = JSON.parse(files.get('.claude/claudxian-settings.json') || '{}') as Record<string, unknown>;
     const blocked = saved.blockedCommands as { unix: string[]; windows: string[] };
 
     expect(blocked.unix).toEqual(['rm -rf']);
@@ -158,7 +158,7 @@ describe('StorageService migration', () => {
     const storage = new StorageService(plugin);
     await storage.initialize();
 
-    const rawSettings = files.get('.claude/claudian-settings.json');
+    const rawSettings = files.get('.claude/claudxian-settings.json');
     // If settings file was created, it should NOT contain the legacy activeConversationId
     const containsLegacyField = rawSettings
       ? 'activeConversationId' in (JSON.parse(rawSettings) as Record<string, unknown>)
@@ -206,7 +206,7 @@ describe('StorageService migration', () => {
     const storage = new StorageService(plugin);
     await storage.initialize();
 
-    const saved = JSON.parse(files.get('.claude/claudian-settings.json') || '{}') as Record<string, unknown>;
+    const saved = JSON.parse(files.get('.claude/claudxian-settings.json') || '{}') as Record<string, unknown>;
     expect(saved.persistentExternalContextPaths).toEqual([]);
   });
 
@@ -228,7 +228,7 @@ describe('StorageService migration', () => {
     const storage = new StorageService(plugin);
     await storage.initialize();
 
-    const saved = JSON.parse(files.get('.claude/claudian-settings.json') || '{}') as Record<string, unknown>;
+    const saved = JSON.parse(files.get('.claude/claudxian-settings.json') || '{}') as Record<string, unknown>;
     const envVars = saved.environmentVariables as string;
     expect(envVars).toContain('FOO=bar');
     expect(envVars).toContain('BAZ=qux');
@@ -278,7 +278,7 @@ describe('StorageService migration', () => {
     const storage = new StorageService(plugin);
     await storage.initialize();
 
-    const saved = JSON.parse(files.get('.claude/claudian-settings.json') || '{}') as Record<string, unknown>;
+    const saved = JSON.parse(files.get('.claude/claudxian-settings.json') || '{}') as Record<string, unknown>;
     expect(saved.lastEnvHash).toBe('abc123');
     // lastClaudeModel defaults to 'haiku' (truthy), so migration doesn't overwrite it
     expect(saved.lastClaudeModel).toBe('haiku');
@@ -292,7 +292,7 @@ describe('StorageService migration', () => {
         lastClaudeModel: 'old-model',
       },
       initialFiles: {
-        '.claude/claudian-settings.json': JSON.stringify({
+        '.claude/claudxian-settings.json': JSON.stringify({
           userName: 'Test User',
           lastEnvHash: 'existing-hash',
           lastClaudeModel: 'existing-model',
@@ -303,7 +303,7 @@ describe('StorageService migration', () => {
     const storage = new StorageService(plugin);
     await storage.initialize();
 
-    const saved = JSON.parse(files.get('.claude/claudian-settings.json') || '{}') as Record<string, unknown>;
+    const saved = JSON.parse(files.get('.claude/claudxian-settings.json') || '{}') as Record<string, unknown>;
     expect(saved.lastEnvHash).toBe('existing-hash');
     expect(saved.lastClaudeModel).toBe('existing-model');
   });
@@ -473,7 +473,7 @@ describe('StorageService migration', () => {
         '.claude/settings.json': JSON.stringify({
           permissions: { allow: [], deny: [], ask: [] },
         }),
-        '.claude/claudian-settings.json': JSON.stringify({
+        '.claude/claudxian-settings.json': JSON.stringify({
           userName: 'Test User',
           lastClaudeModel: '',
         }),
@@ -483,7 +483,7 @@ describe('StorageService migration', () => {
     const storage = new StorageService(plugin);
     await storage.initialize();
 
-    const saved = JSON.parse(files.get('.claude/claudian-settings.json') || '{}') as Record<string, unknown>;
+    const saved = JSON.parse(files.get('.claude/claudxian-settings.json') || '{}') as Record<string, unknown>;
     expect(saved.lastClaudeModel).toBe('claude-3-sonnet');
   });
 
@@ -497,14 +497,14 @@ describe('StorageService migration', () => {
     const { plugin, files } = createMockPlugin({
       dataJson: null,
       initialFiles: {
-        '.claude/claudian-settings.json': JSON.stringify(existingSettings),
+        '.claude/claudxian-settings.json': JSON.stringify(existingSettings),
       },
     });
 
     const storage = new StorageService(plugin);
     await storage.initialize();
 
-    const saved = JSON.parse(files.get('.claude/claudian-settings.json') || '{}') as Record<string, unknown>;
+    const saved = JSON.parse(files.get('.claude/claudxian-settings.json') || '{}') as Record<string, unknown>;
     expect(saved.persistentExternalContextPaths).toEqual(['/path/a', '/path/b']);
   });
 });

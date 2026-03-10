@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import type { App } from 'obsidian';
 import { Notice, PluginSettingTab, Setting } from 'obsidian';
 
-import { getCurrentPlatformKey, getHostnameKey } from '../../core/types';
+import { type BackendId, CODEX_PLAN_REASONING_EFFORTS, CODEX_REASONING_EFFORTS, getCurrentPlatformKey, getHostnameKey, getSupportedBackends, isBackendId } from '../../core/types';
 import { DEFAULT_CLAUDE_MODELS } from '../../core/types/models';
 import { getAvailableLocales, getLocaleDisplayName, setLocale, t } from '../../i18n';
 import type { Locale, TranslationKey } from '../../i18n/types';
@@ -10,6 +10,7 @@ import type ClaudianPlugin from '../../main';
 import { findNodeExecutable, formatContextLimit, getCustomModelIds, getEnhancedPath, getModelsFromEnvironment, parseContextLimit, parseEnvironmentVariables } from '../../utils/env';
 import { expandHomePath } from '../../utils/path';
 import { ClaudianView } from '../chat/ClaudianView';
+import { updateTabBackendUI } from '../chat/tabs/Tab';
 import { buildNavMappingText, parseNavMappings } from './keyboardNavigation';
 import { AgentSettings } from './ui/AgentSettings';
 import { EnvSnippetManager } from './ui/EnvSnippetManager';
@@ -39,7 +40,7 @@ function openHotkeySettings(app: App): void {
       // Handle both old and new Obsidian versions
       const searchEl = tab.searchInputEl ?? tab.searchComponent?.inputEl;
       if (searchEl) {
-        searchEl.value = 'Claudian';
+        searchEl.value = 'Claudxian';
         tab.updateHotkeyVisibility?.();
       }
     }
@@ -90,6 +91,8 @@ export class ClaudianSettingTab extends PluginSettingTab {
 
     setLocale(this.plugin.settings.locale);
 
+    new Setting(containerEl).setName('Common').setHeading();
+
     new Setting(containerEl)
       .setName(t('settings.language.name'))
       .setDesc(t('settings.language.desc'))
@@ -113,6 +116,27 @@ export class ClaudianSettingTab extends PluginSettingTab {
           });
       });
 
+    new Setting(containerEl)
+      .setName(t('settings.backend.name'))
+      .setDesc(t('settings.backend.desc'))
+      .addDropdown((dropdown) => {
+        for (const backend of getSupportedBackends()) {
+          dropdown.addOption(backend.id, backend.displayName);
+        }
+
+        dropdown
+          .setValue(this.plugin.settings.defaultBackend)
+          .onChange(async (value) => {
+            if (!isBackendId(value) || value === this.plugin.settings.defaultBackend) {
+              dropdown.setValue(this.plugin.settings.defaultBackend);
+              return;
+            }
+
+            this.plugin.settings.defaultBackend = value as BackendId;
+            await this.plugin.saveSettings();
+            await this.refreshIdleTabsForBackendChange();
+          });
+      });
     new Setting(containerEl).setName(t('settings.customization')).setHeading();
 
     new Setting(containerEl)
@@ -297,7 +321,7 @@ export class ClaudianSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
 
             // Update all views' layouts immediately
-            for (const leaf of this.plugin.app.workspace.getLeavesOfType('claudian-view')) {
+            for (const leaf of this.plugin.app.workspace.getLeavesOfType('claudxian-view')) {
               if (leaf.view instanceof ClaudianView) {
                 leaf.view.updateLayoutForPosition();
               }
@@ -326,6 +350,77 @@ export class ClaudianSettingTab extends PluginSettingTab {
     addHotkeySettingRow(hotkeyGrid, this.app, 'claudian:new-session', 'settings.newSessionHotkey');
     addHotkeySettingRow(hotkeyGrid, this.app, 'claudian:new-tab', 'settings.newTabHotkey');
     addHotkeySettingRow(hotkeyGrid, this.app, 'claudian:close-current-tab', 'settings.closeTabHotkey');
+
+    new Setting(containerEl).setName('Codex').setHeading();
+
+    new Setting(containerEl)
+      .setName('Codex model')
+      .setDesc('Optional model passed to the Codex CLI via --model.')
+      .addText((text) => {
+        text
+          .setPlaceholder('gpt-5-codex')
+          .setValue(this.plugin.settings.codexModel || '')
+          .onChange(async (value) => {
+            this.plugin.settings.codexModel = value.trim();
+            await this.plugin.saveSettings();
+            this.refreshAllTabsBackendUI();
+          });
+      });
+
+    new Setting(containerEl)
+      .setName('Codex quick models')
+      .setDesc('One model id per line. These appear in the chat model selector when Codex is active.')
+      .addTextArea((text) => {
+        text
+          .setPlaceholder('gpt-5-codex\ngpt-5\no4-mini')
+          .setValue((this.plugin.settings.codexModelOptions || []).join('\n'))
+          .onChange(async (value) => {
+            this.plugin.settings.codexModelOptions = value
+              .split(/\r?\n/)
+              .map((item) => item.trim())
+              .filter((item) => item.length > 0);
+            await this.plugin.saveSettings();
+            this.refreshAllTabsBackendUI();
+          });
+        text.inputEl.rows = 4;
+        text.inputEl.cols = 40;
+      });
+
+    new Setting(containerEl)
+      .setName('Codex reasoning')
+      .setDesc('Reasoning effort for normal Codex turns.')
+      .addDropdown((dropdown) => {
+        for (const option of CODEX_REASONING_EFFORTS) {
+          dropdown.addOption(option.value, option.label);
+        }
+
+        dropdown
+          .setValue(this.plugin.settings.codexReasoningEffort || '')
+          .onChange(async (value) => {
+            this.plugin.settings.codexReasoningEffort = value as typeof this.plugin.settings.codexReasoningEffort;
+            await this.plugin.saveSettings();
+            this.refreshAllTabsBackendUI();
+          });
+      });
+
+    new Setting(containerEl)
+      .setName('Codex plan reasoning')
+      .setDesc('Reasoning effort used while Codex is in plan mode.')
+      .addDropdown((dropdown) => {
+        for (const option of CODEX_PLAN_REASONING_EFFORTS) {
+          dropdown.addOption(option.value, option.label);
+        }
+
+        dropdown
+          .setValue(this.plugin.settings.codexPlanModeReasoningEffort || '')
+          .onChange(async (value) => {
+            this.plugin.settings.codexPlanModeReasoningEffort = value as typeof this.plugin.settings.codexPlanModeReasoningEffort;
+            await this.plugin.saveSettings();
+            this.refreshAllTabsBackendUI();
+          });
+      });
+
+    new Setting(containerEl).setName('Claude').setHeading();
 
     new Setting(containerEl).setName(t('settings.slashCommands.name')).setHeading();
 
@@ -524,7 +619,7 @@ export class ClaudianSettingTab extends PluginSettingTab {
             this.plugin.settings.show1MModel = value;
             await this.plugin.saveSettings();
 
-            const view = this.plugin.app.workspace.getLeavesOfType('claudian-view')[0]?.view as ClaudianView | undefined;
+            const view = this.plugin.app.workspace.getLeavesOfType('claudxian-view')[0]?.view as ClaudianView | undefined;
             view?.refreshModelSelector();
           })
       );
@@ -679,6 +774,18 @@ export class ClaudianSettingTab extends PluginSettingTab {
     });
   }
 
+  private refreshAllTabsBackendUI(): void {
+    for (const view of this.plugin.getAllViews()) {
+      const tabManager = view.getTabManager();
+      if (!tabManager) continue;
+
+      for (const tab of tabManager.getAllTabs()) {
+        updateTabBackendUI(tab, this.plugin);
+      }
+      view.refreshBackendBadge();
+    }
+  }
+
   private renderContextLimitsSection(): void {
     const container = this.contextLimitsContainer;
     if (!container) return;
@@ -749,6 +856,31 @@ export class ClaudianSettingTab extends PluginSettingTab {
         await this.plugin.saveSettings();
       });
     }
+  }
+
+  private async refreshIdleTabsForBackendChange(): Promise<void> {
+    for (const view of this.plugin.getAllViews()) {
+      const tabManager = view.getTabManager();
+      if (!tabManager) continue;
+
+      for (const tab of tabManager.getAllTabs()) {
+        const hasConversation = !!tab.conversationId;
+        const hasMessages = tab.state.messages.length > 0;
+        if (hasConversation || hasMessages) {
+          continue;
+        }
+
+        tab.service?.cleanup();
+        tab.service = null;
+        tab.serviceInitialized = false;
+        tab.ui.modelSelector?.setReady(false);
+
+        updateTabBackendUI(tab, this.plugin);
+      }
+      view.refreshBackendBadge();
+    }
+
+    new Notice('Backend updated. New conversations will use the selected runtime.');
   }
 
   private async restartServiceForPromptChange(): Promise<void> {

@@ -18,12 +18,14 @@ jest.mock('fs');
 function createMockCallbacks() {
   return {
     onModelChange: jest.fn(),
-    onThinkingBudgetChange: jest.fn(),
+    onReasoningChange: jest.fn(),
     onPermissionModeChange: jest.fn(),
     getSettings: jest.fn().mockReturnValue({
+      backendId: 'claude',
       model: 'haiku',
       thinkingBudget: 'off',
       permissionMode: 'yolo',
+      show1MModel: false,
     }),
     getEnvironmentVariables: jest.fn().mockReturnValue(''),
   };

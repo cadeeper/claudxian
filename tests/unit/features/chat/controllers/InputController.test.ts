@@ -65,6 +65,7 @@ function createMockAgentService() {
     clearApprovedPlanContent: jest.fn(),
     ensureReady: jest.fn().mockResolvedValue(true),
     getSessionId: jest.fn().mockReturnValue(null),
+    getBackendId: jest.fn().mockReturnValue('claude'),
   };
 }
 
@@ -102,6 +103,7 @@ function createMockDeps(overrides: Partial<InputControllerDeps> = {}): InputCont
         enableBlocklist: true,
         permissionMode: 'yolo',
         enableAutoTitleGeneration: true,
+        defaultBackend: 'claude',
       },
       mcpManager: {
         extractMentions: jest.fn().mockReturnValue(new Set()),
@@ -498,6 +500,68 @@ describe('InputController - Message Queue', () => {
       await localController.sendMessage();
 
       expect(mockAgentService.query).toHaveBeenCalled();
+    });
+
+    it('should expand local Codex slash commands before sending', async () => {
+      deps = createSendableDeps();
+      deps.plugin.settings.defaultBackend = 'codex';
+      deps.plugin.settings.slashCommands = [
+        {
+          id: 'cmd-review',
+          name: 'review',
+          description: 'Review code',
+          content: 'Review this:\n$ARGUMENTS\n\nFile: @$1',
+          model: 'gpt-5' as any,
+          allowedTools: ['Read', 'Grep'],
+        },
+      ];
+
+      const { mockAgentService } = deps as any;
+      mockAgentService.getBackendId.mockReturnValue('codex');
+      mockAgentService.query.mockReturnValue(createMockStream([{ type: 'done' }]));
+
+      inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      inputEl.value = '/review src/main.ts performance';
+      controller = new InputController(deps);
+
+      await controller.sendMessage();
+
+      const [promptSent, , , queryOptions] = mockAgentService.query.mock.calls[0];
+      expect(promptSent).toContain('Review this:\nsrc/main.ts performance');
+      expect(promptSent).toContain('File: @src/main.ts');
+      expect(queryOptions).toMatchObject({
+        model: 'gpt-5',
+        allowedTools: ['Read', 'Grep'],
+      });
+      expect(deps.state.messages[0].displayContent).toBe('/review src/main.ts performance');
+      expect(deps.state.messages[0].content).toContain('Review this:');
+    });
+
+    it('should block non-user-invocable Codex slash commands', async () => {
+      deps = createSendableDeps();
+      deps.plugin.settings.defaultBackend = 'codex';
+      deps.plugin.settings.slashCommands = [
+        {
+          id: 'skill-hidden',
+          name: 'hidden-skill',
+          description: 'Internal skill',
+          content: 'Hidden',
+          userInvocable: false,
+        },
+      ];
+
+      const { mockAgentService } = deps as any;
+      mockAgentService.getBackendId.mockReturnValue('codex');
+
+      inputEl = deps.getInputEl() as ReturnType<typeof createMockInputEl>;
+      inputEl.value = '/hidden-skill';
+      controller = new InputController(deps);
+
+      await controller.sendMessage();
+
+      expect(mockNotice).toHaveBeenCalledWith('/hidden-skill cannot be invoked directly.');
+      expect(mockAgentService.query).not.toHaveBeenCalled();
+      expect(inputEl.value).toBe('/hidden-skill');
     });
   });
 

@@ -21,6 +21,7 @@ import type {
   SubagentInfo,
   UsageInfo,
 } from '../types';
+import { BACKEND_CLAUDE, normalizeBackendId } from '../types';
 import type { VaultFileAdapter } from './VaultFileAdapter';
 
 /** Path to sessions folder relative to vault root. */
@@ -29,6 +30,7 @@ export const SESSIONS_PATH = '.claude/sessions';
 /** Metadata record stored as first line of JSONL. */
 interface SessionMetaRecord {
   type: 'meta';
+  backendId?: 'claude' | 'codex';
   id: string;
   title: string;
   createdAt: number;
@@ -178,6 +180,7 @@ export class SessionStorage {
       }
 
       return {
+        backendId: normalizeBackendId(record.backendId, BACKEND_CLAUDE),
         id: record.id,
         title: record.title,
         createdAt: record.createdAt,
@@ -217,6 +220,7 @@ export class SessionStorage {
     if (!meta) return null;
 
     return {
+      backendId: normalizeBackendId(meta.backendId, BACKEND_CLAUDE),
       id: meta.id,
       title: meta.title,
       createdAt: meta.createdAt,
@@ -236,6 +240,7 @@ export class SessionStorage {
     // First line: metadata
     const meta: SessionMetaRecord = {
       type: 'meta',
+      backendId: conversation.backendId,
       id: conversation.id,
       title: conversation.title,
       createdAt: conversation.createdAt,
@@ -361,6 +366,7 @@ export class SessionStorage {
     for (const meta of nativeMetas) {
       if (!legacyIds.has(meta.id)) {
         metas.push({
+          backendId: normalizeBackendId(meta.backendId, BACKEND_CLAUDE),
           id: meta.id,
           title: meta.title,
           createdAt: meta.createdAt,
@@ -384,6 +390,7 @@ export class SessionStorage {
     const subagentData = this.extractSubagentData(conversation.messages);
 
     return {
+      backendId: conversation.backendId,
       id: conversation.id,
       title: conversation.title,
       titleGenerationStatus: conversation.titleGenerationStatus,

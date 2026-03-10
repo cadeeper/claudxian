@@ -1,4 +1,7 @@
+export type { AgentSessionService } from './AgentSessionService';
 export { type ApprovalCallback, type ApprovalCallbackOptions, ClaudianService, type QueryOptions } from './ClaudianService';
+export { CodexSessionService } from './CodexSessionService';
+export { createAgentSessionService } from './createAgentSessionService';
 export { MessageChannel } from './MessageChannel';
 export {
   type ColdStartQueryContext,

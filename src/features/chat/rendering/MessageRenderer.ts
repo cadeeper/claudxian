@@ -2,7 +2,8 @@ import type { App, Component } from 'obsidian';
 import { MarkdownRenderer, Notice } from 'obsidian';
 
 import { isSubagentToolName, isWriteEditTool, TOOL_AGENT_OUTPUT } from '../../../core/tools/toolNames';
-import type { ChatMessage, ImageAttachment, SubagentInfo, ToolCallInfo } from '../../../core/types';
+import type { BackendId, ChatMessage, ImageAttachment, SubagentInfo, ToolCallInfo } from '../../../core/types';
+import { BACKEND_CLAUDE, getBackendCapabilities } from '../../../core/types';
 import { t } from '../../../i18n';
 import type ClaudianPlugin from '../../../main';
 import { formatDurationMmSs } from '../../../utils/date';
@@ -26,6 +27,7 @@ export class MessageRenderer {
   private messagesEl: HTMLElement;
   private rewindCallback?: (messageId: string) => Promise<void>;
   private forkCallback?: (messageId: string) => Promise<void>;
+  private getCurrentBackendId?: () => BackendId;
   private liveMessageEls = new Map<string, HTMLElement>();
 
   private static readonly REWIND_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>`;
@@ -38,6 +40,7 @@ export class MessageRenderer {
     messagesEl: HTMLElement,
     rewindCallback?: (messageId: string) => Promise<void>,
     forkCallback?: (messageId: string) => Promise<void>,
+    getCurrentBackendId?: () => BackendId,
   ) {
     this.app = plugin.app;
     this.plugin = plugin;
@@ -45,6 +48,7 @@ export class MessageRenderer {
     this.messagesEl = messagesEl;
     this.rewindCallback = rewindCallback;
     this.forkCallback = forkCallback;
+    this.getCurrentBackendId = getCurrentBackendId;
 
     // Register delegated click handler for file links
     registerFileLinkHandler(this.app, this.messagesEl, this.component);
@@ -178,10 +182,11 @@ export class MessageRenderer {
         this.addUserCopyButton(msgEl, textToShow);
       }
       if (msg.sdkUserUuid && this.isRewindEligible(allMessages, index)) {
-        if (this.rewindCallback) {
+        const capabilities = this.getCurrentCapabilities();
+        if (this.rewindCallback && capabilities.supportsRewind) {
           this.addRewindButton(msgEl, msg.id);
         }
-        if (this.forkCallback) {
+        if (this.forkCallback && capabilities.supportsFork) {
           this.addForkButton(msgEl, msg.id);
         }
       }
@@ -204,7 +209,7 @@ export class MessageRenderer {
     const msgEl = this.messagesEl.createDiv({ cls: 'claudian-message claudian-message-assistant' });
     const contentEl = msgEl.createDiv({ cls: 'claudian-message-content', attr: { dir: 'auto' } });
     const textEl = contentEl.createDiv({ cls: 'claudian-text-block' });
-    textEl.innerHTML = '<span class="claudian-interrupted">Interrupted</span> <span class="claudian-interrupted-hint">· What should Claudian do instead?</span>';
+    textEl.innerHTML = '<span class="claudian-interrupted">Interrupted</span> <span class="claudian-interrupted-hint">· What should Claudxian do instead?</span>';
   }
 
   /**
@@ -582,18 +587,20 @@ export class MessageRenderer {
     const msgEl = this.liveMessageEls.get(msg.id);
     if (!msgEl) return;
 
-    if (this.rewindCallback && !msgEl.querySelector('.claudian-message-rewind-btn')) {
+    const capabilities = this.getCurrentCapabilities();
+    if (this.rewindCallback && capabilities.supportsRewind && !msgEl.querySelector('.claudian-message-rewind-btn')) {
       this.addRewindButton(msgEl, msg.id);
     }
-    if (this.forkCallback && !msgEl.querySelector('.claudian-message-fork-btn')) {
+    if (this.forkCallback && capabilities.supportsFork && !msgEl.querySelector('.claudian-message-fork-btn')) {
       this.addForkButton(msgEl, msg.id);
     }
     this.cleanupLiveMessageEl(msg.id, msgEl);
   }
 
   private cleanupLiveMessageEl(msgId: string, msgEl: HTMLElement): void {
-    const needsRewind = this.rewindCallback && !msgEl.querySelector('.claudian-message-rewind-btn');
-    const needsFork = this.forkCallback && !msgEl.querySelector('.claudian-message-fork-btn');
+    const capabilities = this.getCurrentCapabilities();
+    const needsRewind = this.rewindCallback && capabilities.supportsRewind && !msgEl.querySelector('.claudian-message-rewind-btn');
+    const needsFork = this.forkCallback && capabilities.supportsFork && !msgEl.querySelector('.claudian-message-fork-btn');
     if (!needsRewind && !needsFork) {
       this.liveMessageEls.delete(msgId);
     }
@@ -646,6 +653,11 @@ export class MessageRenderer {
         new Notice(t('chat.rewind.failed', { error: err instanceof Error ? err.message : 'Unknown error' }));
       }
     });
+  }
+
+  private getCurrentCapabilities() {
+    const backendId = this.getCurrentBackendId?.() ?? BACKEND_CLAUDE;
+    return getBackendCapabilities(backendId);
   }
 
   private addForkButton(msgEl: HTMLElement, messageId: string): void {

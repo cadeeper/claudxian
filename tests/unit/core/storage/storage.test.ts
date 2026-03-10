@@ -1,4 +1,5 @@
 import type { ChatMessage, Conversation } from '@/core/types';
+import { BACKEND_CLAUDE } from '@/core/types';
 import { parseSlashCommandContent } from '@/utils/slashCommand';
 
 // ============================================================================
@@ -76,6 +77,7 @@ describe('SessionStorage JSONL format', () => {
   describe('serializeToJSONL', () => {
     it('should serialize conversation to valid JSONL', () => {
       const conversation: Conversation = {
+        backendId: BACKEND_CLAUDE,
         id: 'conv-456',
         title: 'My Chat',
         createdAt: 5000,
@@ -109,6 +111,7 @@ describe('SessionStorage JSONL format', () => {
 
     it('should preserve image data when serializing', () => {
       const conversation: Conversation = {
+        backendId: BACKEND_CLAUDE,
         id: 'conv-img',
         title: 'Image Chat',
         createdAt: 1000,
@@ -146,6 +149,7 @@ describe('SessionStorage JSONL format', () => {
 
     it('should preserve lastResponseAt in serialization', () => {
       const conversation: Conversation = {
+        backendId: BACKEND_CLAUDE,
         id: 'conv-lr',
         title: 'Test',
         createdAt: 1000,
@@ -163,6 +167,7 @@ describe('SessionStorage JSONL format', () => {
 
     it('should round-trip conversation correctly', () => {
       const original: Conversation = {
+        backendId: BACKEND_CLAUDE,
         id: 'conv-rt',
         title: 'Round Trip',
         createdAt: 1000,

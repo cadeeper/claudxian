@@ -3,13 +3,18 @@ import * as path from 'path';
 
 import type { McpServerManager } from '../../../core/mcp';
 import type {
+  BackendId,
   ClaudeModel,
   ClaudianMcpServer,
+  CodexPlanModeReasoningEffort,
+  CodexReasoningEffort,
   PermissionMode,
   ThinkingBudget,
   UsageInfo
 } from '../../../core/types';
 import {
+  CODEX_PLAN_REASONING_EFFORTS,
+  CODEX_REASONING_EFFORTS,
   DEFAULT_CLAUDE_MODELS,
   THINKING_BUDGETS
 } from '../../../core/types';
@@ -18,61 +23,82 @@ import { getModelsFromEnvironment, parseEnvironmentVariables } from '../../../ut
 import { filterValidPaths, findConflictingPath, isDuplicatePath, isValidDirectoryPath, validateDirectoryPath } from '../../../utils/externalContext';
 import { expandHomePath, normalizePathForFilesystem } from '../../../utils/path';
 
-export interface ToolbarSettings {
+export interface ToolbarModelOption {
+  value: string;
+  label: string;
+  description: string;
+}
+
+interface BaseToolbarSettings {
+  backendId: BackendId;
   model: ClaudeModel;
-  thinkingBudget: ThinkingBudget;
+  modelOptions?: ToolbarModelOption[];
   permissionMode: PermissionMode;
+}
+
+export interface ClaudeToolbarSettings extends BaseToolbarSettings {
+  backendId: 'claude';
+  thinkingBudget: ThinkingBudget;
   show1MModel?: boolean;
 }
 
+export interface CodexToolbarSettings extends BaseToolbarSettings {
+  backendId: 'codex';
+  codexReasoningEffort: CodexReasoningEffort;
+  codexPlanModeReasoningEffort: CodexPlanModeReasoningEffort;
+  prePlanPermissionMode?: Exclude<PermissionMode, 'plan'> | null;
+}
+
+export type ToolbarSettings = ClaudeToolbarSettings | CodexToolbarSettings;
+export type ToolbarReasoningValue = ThinkingBudget | CodexReasoningEffort | CodexPlanModeReasoningEffort;
+
 export interface ToolbarCallbacks {
   onModelChange: (model: ClaudeModel) => Promise<void>;
-  onThinkingBudgetChange: (budget: ThinkingBudget) => Promise<void>;
+  onReasoningChange: (value: ToolbarReasoningValue) => Promise<void>;
   onPermissionModeChange: (mode: PermissionMode) => Promise<void>;
   getSettings: () => ToolbarSettings;
   getEnvironmentVariables?: () => string;
 }
 
-export class ModelSelector {
-  private container: HTMLElement;
-  private buttonEl: HTMLElement | null = null;
-  private dropdownEl: HTMLElement | null = null;
-  private callbacks: ToolbarCallbacks;
-  private isReady = false;
+function isClaudeToolbarSettings(settings: ToolbarSettings): settings is ClaudeToolbarSettings {
+  return settings.backendId === 'claude';
+}
 
-  constructor(parentEl: HTMLElement, callbacks: ToolbarCallbacks) {
+function isCodexToolbarSettings(settings: ToolbarSettings): settings is CodexToolbarSettings {
+  return settings.backendId === 'codex';
+}
+
+interface ToolbarModelSelectorLike {
+  setReady(ready: boolean): void;
+  setVisible(visible: boolean): void;
+  updateDisplay(): void;
+  renderOptions(): void;
+}
+
+interface ToolbarReasoningSelectorLike {
+  setVisible(visible: boolean): void;
+  updateDisplay(): void;
+}
+
+interface ToolbarPermissionToggleLike {
+  updateDisplay(): void;
+}
+
+abstract class BaseModelSelectorView implements ToolbarModelSelectorLike {
+  protected container: HTMLElement;
+  protected buttonEl: HTMLElement | null = null;
+  protected dropdownEl: HTMLElement | null = null;
+  protected callbacks: ToolbarCallbacks;
+  protected isReady = false;
+
+  constructor(parentEl: HTMLElement, callbacks: ToolbarCallbacks, modifierClass: string) {
     this.callbacks = callbacks;
     this.container = parentEl.createDiv({ cls: 'claudian-model-selector' });
+    this.container.addClass(modifierClass);
     this.render();
   }
 
-  private getAvailableModels() {
-    let models: { value: string; label: string; description: string }[] = [];
-
-    if (this.callbacks.getEnvironmentVariables) {
-      const envVarsStr = this.callbacks.getEnvironmentVariables();
-      const envVars = parseEnvironmentVariables(envVarsStr);
-      const customModels = getModelsFromEnvironment(envVars);
-
-      if (customModels.length > 0) {
-        models = customModels;
-      } else {
-        models = [...DEFAULT_CLAUDE_MODELS];
-      }
-    } else {
-      models = [...DEFAULT_CLAUDE_MODELS];
-    }
-
-    // When 1M context is enabled, update sonnet label to show "(1M)"
-    const settings = this.callbacks.getSettings();
-    if (settings.show1MModel) {
-      models = models.map(m =>
-        m.value === 'sonnet' ? { ...m, label: 'Sonnet (1M)' } : m
-      );
-    }
-
-    return models;
-  }
+  protected abstract getAvailableModels(): ToolbarModelOption[];
 
   private render() {
     this.container.empty();
@@ -90,11 +116,9 @@ export class ModelSelector {
     const currentModel = this.callbacks.getSettings().model;
     const models = this.getAvailableModels();
     const modelInfo = models.find(m => m.value === currentModel);
-
     const displayModel = modelInfo || models[0];
 
     this.buttonEl.empty();
-
     const labelEl = this.buttonEl.createSpan({ cls: 'claudian-model-label' });
     labelEl.setText(displayModel?.label || 'Unknown');
   }
@@ -102,6 +126,10 @@ export class ModelSelector {
   setReady(ready: boolean) {
     this.isReady = ready;
     this.buttonEl?.toggleClass('ready', ready);
+  }
+
+  setVisible(visible: boolean): void {
+    this.container.style.display = visible ? '' : 'none';
   }
 
   renderOptions() {
@@ -132,7 +160,102 @@ export class ModelSelector {
   }
 }
 
-export class ThinkingBudgetSelector {
+export class ClaudeModelSelector extends BaseModelSelectorView {
+  constructor(parentEl: HTMLElement, callbacks: ToolbarCallbacks) {
+    super(parentEl, callbacks, 'claudian-model-selector--claude');
+  }
+
+  protected getAvailableModels(): ToolbarModelOption[] {
+    const settings = this.callbacks.getSettings();
+    let models: ToolbarModelOption[] = [];
+
+    if (this.callbacks.getEnvironmentVariables) {
+      const envVarsStr = this.callbacks.getEnvironmentVariables();
+      const envVars = parseEnvironmentVariables(envVarsStr);
+      const customModels = getModelsFromEnvironment(envVars);
+
+      if (customModels.length > 0) {
+        models = customModels;
+      } else {
+        models = [...DEFAULT_CLAUDE_MODELS];
+      }
+    } else {
+      models = [...DEFAULT_CLAUDE_MODELS];
+    }
+
+    if (isClaudeToolbarSettings(settings) && settings.show1MModel) {
+      models = models.map(m =>
+        m.value === 'sonnet' ? { ...m, label: 'Sonnet (1M)' } : m
+      );
+    }
+
+    return models;
+  }
+}
+
+export class CodexModelSelector extends BaseModelSelectorView {
+  constructor(parentEl: HTMLElement, callbacks: ToolbarCallbacks) {
+    super(parentEl, callbacks, 'claudian-model-selector--codex');
+  }
+
+  protected getAvailableModels(): ToolbarModelOption[] {
+    const settings = this.callbacks.getSettings();
+    if (!isCodexToolbarSettings(settings) || !settings.modelOptions || settings.modelOptions.length === 0) {
+      return [{
+        value: '',
+        label: 'Default',
+        description: 'Use the Codex CLI default model.',
+      }];
+    }
+
+    return settings.modelOptions;
+  }
+}
+
+export class ModelSelector implements ToolbarModelSelectorLike {
+  private visible = true;
+  private readonly callbacks: ToolbarCallbacks;
+  private readonly claudeSelector: ClaudeModelSelector;
+  private readonly codexSelector: CodexModelSelector;
+
+  constructor(parentEl: HTMLElement, callbacks: ToolbarCallbacks) {
+    this.callbacks = callbacks;
+    this.claudeSelector = new ClaudeModelSelector(parentEl, callbacks);
+    this.codexSelector = new CodexModelSelector(parentEl, callbacks);
+    this.syncVisibility();
+  }
+
+  private syncVisibility(): void {
+    const isCodex = this.callbacks.getSettings().backendId === 'codex';
+    this.claudeSelector.setVisible(this.visible && !isCodex);
+    this.codexSelector.setVisible(this.visible && isCodex);
+  }
+
+  setReady(ready: boolean): void {
+    this.claudeSelector.setReady(ready);
+    this.codexSelector.setReady(ready);
+    this.syncVisibility();
+  }
+
+  setVisible(visible: boolean): void {
+    this.visible = visible;
+    this.syncVisibility();
+  }
+
+  updateDisplay(): void {
+    this.claudeSelector.updateDisplay();
+    this.codexSelector.updateDisplay();
+    this.syncVisibility();
+  }
+
+  renderOptions(): void {
+    this.claudeSelector.renderOptions();
+    this.codexSelector.renderOptions();
+    this.syncVisibility();
+  }
+}
+
+export class ClaudeThinkingBudgetSelector implements ToolbarReasoningSelectorLike {
   private container: HTMLElement;
   private gearsEl: HTMLElement | null = null;
   private callbacks: ToolbarCallbacks;
@@ -140,6 +263,7 @@ export class ThinkingBudgetSelector {
   constructor(parentEl: HTMLElement, callbacks: ToolbarCallbacks) {
     this.callbacks = callbacks;
     this.container = parentEl.createDiv({ cls: 'claudian-thinking-selector' });
+    this.container.addClass('claudian-thinking-selector--claude');
     this.render();
   }
 
@@ -157,7 +281,10 @@ export class ThinkingBudgetSelector {
     if (!this.gearsEl) return;
     this.gearsEl.empty();
 
-    const currentBudget = this.callbacks.getSettings().thinkingBudget;
+    const settings = this.callbacks.getSettings();
+    const currentBudget = isClaudeToolbarSettings(settings)
+      ? settings.thinkingBudget
+      : 'off';
     const currentBudgetInfo = THINKING_BUDGETS.find(b => b.value === currentBudget);
 
     const currentEl = this.gearsEl.createDiv({ cls: 'claudian-thinking-current' });
@@ -176,7 +303,7 @@ export class ThinkingBudgetSelector {
 
       gearEl.addEventListener('click', async (e) => {
         e.stopPropagation();
-        await this.callbacks.onThinkingBudgetChange(budget.value);
+        await this.callbacks.onReasoningChange(budget.value);
         this.updateDisplay();
       });
     }
@@ -185,9 +312,128 @@ export class ThinkingBudgetSelector {
   updateDisplay() {
     this.renderGears();
   }
+
+  setVisible(visible: boolean): void {
+    this.container.style.display = visible ? '' : 'none';
+  }
 }
 
-export class PermissionToggle {
+export class CodexReasoningEffortSelector implements ToolbarReasoningSelectorLike {
+  private container: HTMLElement;
+  private currentEl: HTMLElement | null = null;
+  private optionsEl: HTMLElement | null = null;
+  private labelEl: HTMLElement | null = null;
+  private callbacks: ToolbarCallbacks;
+
+  constructor(parentEl: HTMLElement, callbacks: ToolbarCallbacks) {
+    this.callbacks = callbacks;
+    this.container = parentEl.createDiv({ cls: 'claudian-thinking-selector' });
+    this.container.addClass('claudian-thinking-selector--codex');
+    this.render();
+  }
+
+  private getOptions() {
+    const settings = this.callbacks.getSettings();
+    return settings.permissionMode === 'plan'
+      ? CODEX_PLAN_REASONING_EFFORTS
+      : CODEX_REASONING_EFFORTS;
+  }
+
+  private getCurrentEffort(): CodexReasoningEffort | CodexPlanModeReasoningEffort {
+    const settings = this.callbacks.getSettings();
+    if (!isCodexToolbarSettings(settings)) {
+      return '';
+    }
+
+    return settings.permissionMode === 'plan'
+      ? settings.codexPlanModeReasoningEffort
+      : settings.codexReasoningEffort;
+  }
+
+  private render() {
+    this.container.empty();
+
+    this.labelEl = this.container.createSpan({ cls: 'claudian-thinking-label-text' });
+    this.labelEl.setText(this.callbacks.getSettings().permissionMode === 'plan' ? 'Plan:' : 'Reasoning:');
+
+    const selectorEl = this.container.createDiv({ cls: 'claudian-thinking-gears' });
+    this.currentEl = selectorEl.createDiv({ cls: 'claudian-thinking-current' });
+    this.optionsEl = selectorEl.createDiv({ cls: 'claudian-thinking-options' });
+    this.renderOptions();
+  }
+
+  private renderOptions() {
+    if (!this.currentEl || !this.optionsEl) return;
+
+    const currentEffort = this.getCurrentEffort();
+    const options = this.getOptions();
+    const currentOption = options.find(option => option.value === currentEffort) ?? options[0];
+
+    if (this.labelEl) {
+      this.labelEl.setText(this.callbacks.getSettings().permissionMode === 'plan' ? 'Plan:' : 'Reasoning:');
+    }
+
+    this.currentEl.empty();
+    this.currentEl.setText(currentOption?.label || 'Default');
+
+    this.optionsEl.empty();
+    for (const option of [...options].reverse()) {
+      const optionEl = this.optionsEl.createDiv({ cls: 'claudian-thinking-gear' });
+      optionEl.setText(option.label);
+      optionEl.setAttribute('title', option.description);
+      if (option.value === currentEffort) {
+        optionEl.addClass('selected');
+      }
+
+      optionEl.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await this.callbacks.onReasoningChange(option.value);
+        this.updateDisplay();
+      });
+    }
+  }
+
+  updateDisplay() {
+    this.renderOptions();
+  }
+
+  setVisible(visible: boolean): void {
+    this.container.style.display = visible ? '' : 'none';
+  }
+}
+
+export class ThinkingBudgetSelector implements ToolbarReasoningSelectorLike {
+  private visible = true;
+  private readonly callbacks: ToolbarCallbacks;
+  private readonly claudeSelector: ClaudeThinkingBudgetSelector;
+  private readonly codexSelector: CodexReasoningEffortSelector;
+
+  constructor(parentEl: HTMLElement, callbacks: ToolbarCallbacks) {
+    this.callbacks = callbacks;
+    this.claudeSelector = new ClaudeThinkingBudgetSelector(parentEl, callbacks);
+    this.codexSelector = new CodexReasoningEffortSelector(parentEl, callbacks);
+    this.syncVisibility();
+  }
+
+  private syncVisibility(): void {
+    const isCodex = this.callbacks.getSettings().backendId === 'codex';
+    this.claudeSelector.setVisible(this.visible && !isCodex);
+    this.codexSelector.setVisible(this.visible && isCodex);
+  }
+
+  setVisible(visible: boolean): void {
+    this.visible = visible;
+    this.syncVisibility();
+  }
+
+  updateDisplay() {
+    this.claudeSelector.updateDisplay();
+    this.codexSelector.updateDisplay();
+    this.syncVisibility();
+  }
+}
+
+export class ClaudePermissionToggle implements ToolbarPermissionToggleLike {
   private container: HTMLElement;
   private toggleEl: HTMLElement | null = null;
   private labelEl: HTMLElement | null = null;
@@ -196,6 +442,7 @@ export class PermissionToggle {
   constructor(parentEl: HTMLElement, callbacks: ToolbarCallbacks) {
     this.callbacks = callbacks;
     this.container = parentEl.createDiv({ cls: 'claudian-permission-toggle' });
+    this.container.addClass('claudian-permission-toggle--claude');
     this.render();
   }
 
@@ -206,7 +453,6 @@ export class PermissionToggle {
     this.toggleEl = this.container.createDiv({ cls: 'claudian-toggle-switch' });
 
     this.updateDisplay();
-
     this.toggleEl.addEventListener('click', () => this.toggle());
   }
 
@@ -214,7 +460,6 @@ export class PermissionToggle {
     if (!this.toggleEl || !this.labelEl) return;
 
     const mode = this.callbacks.getSettings().permissionMode;
-
     if (mode === 'plan') {
       this.toggleEl.style.display = 'none';
       this.labelEl.setText('PLAN');
@@ -237,6 +482,140 @@ export class PermissionToggle {
     const newMode: PermissionMode = current === 'yolo' ? 'normal' : 'yolo';
     await this.callbacks.onPermissionModeChange(newMode);
     this.updateDisplay();
+  }
+
+  setVisible(visible: boolean): void {
+    this.container.style.display = visible ? '' : 'none';
+  }
+}
+
+export class CodexPermissionToggle implements ToolbarPermissionToggleLike {
+  private container: HTMLElement;
+  private callbacks: ToolbarCallbacks;
+  private modeSelectEl: HTMLSelectElement | null = null;
+  private permissionSelectEl: HTMLSelectElement | null = null;
+
+  constructor(parentEl: HTMLElement, callbacks: ToolbarCallbacks) {
+    this.callbacks = callbacks;
+    this.container = parentEl.createDiv({ cls: 'claudian-permission-toggle' });
+    this.container.addClass('claudian-permission-toggle--codex');
+    this.render();
+  }
+
+  private render() {
+    this.container.empty();
+
+    const modeGroupEl = this.container.createDiv({ cls: 'claudian-permission-group' });
+    this.modeSelectEl = modeGroupEl.createEl('select', {
+      cls: 'claudian-permission-select claudian-permission-select--mode',
+    }) as HTMLSelectElement;
+    this.modeSelectEl.setAttribute('aria-label', 'Codex mode');
+    this.modeSelectEl.setAttribute('title', 'Mode');
+    this.createOption(this.modeSelectEl, 'agent', 'Agent');
+    this.createOption(this.modeSelectEl, 'plan', 'Plan');
+
+    const permissionGroupEl = this.container.createDiv({ cls: 'claudian-permission-group' });
+    this.permissionSelectEl = permissionGroupEl.createEl('select', {
+      cls: 'claudian-permission-select claudian-permission-select--access',
+    }) as HTMLSelectElement;
+    this.permissionSelectEl.setAttribute('aria-label', 'Codex access');
+    this.permissionSelectEl.setAttribute('title', 'Access');
+    this.createOption(this.permissionSelectEl, 'normal', 'Safe');
+    this.createOption(this.permissionSelectEl, 'yolo', 'YOLO');
+
+    this.modeSelectEl.addEventListener('change', async (e) => {
+      e.stopPropagation();
+      const nextMode = this.modeSelectEl?.value;
+      if (!nextMode) {
+        this.updateDisplay();
+        return;
+      }
+
+      const settings = this.callbacks.getSettings();
+      if (!isCodexToolbarSettings(settings)) {
+        return;
+      }
+
+      const targetPermissionMode: PermissionMode = nextMode === 'plan'
+        ? 'plan'
+        : (settings.prePlanPermissionMode ?? 'normal');
+
+      if (settings.permissionMode === targetPermissionMode) {
+        this.updateDisplay();
+        return;
+      }
+
+      await this.callbacks.onPermissionModeChange(targetPermissionMode);
+      this.updateDisplay();
+    });
+
+    this.permissionSelectEl.addEventListener('change', async (e) => {
+      e.stopPropagation();
+      const nextMode = this.permissionSelectEl?.value as PermissionMode | undefined;
+      const settings = this.callbacks.getSettings();
+      if (!nextMode || settings.permissionMode === 'plan' || settings.permissionMode === nextMode) {
+        this.updateDisplay();
+        return;
+      }
+
+      await this.callbacks.onPermissionModeChange(nextMode);
+      this.updateDisplay();
+    });
+
+    this.updateDisplay();
+  }
+
+  private createOption(selectEl: HTMLSelectElement | null, value: string, label: string): void {
+    const optionEl = selectEl?.createEl('option', { text: label }) as HTMLOptionElement | null;
+    if (!optionEl) {
+      return;
+    }
+
+    optionEl.value = value;
+  }
+
+  updateDisplay() {
+    const settings = this.callbacks.getSettings();
+    if (!this.modeSelectEl || !this.permissionSelectEl || !isCodexToolbarSettings(settings)) {
+      return;
+    }
+
+    const isPlanMode = settings.permissionMode === 'plan';
+    this.modeSelectEl.value = isPlanMode ? 'plan' : 'agent';
+    this.permissionSelectEl.value = isPlanMode
+      ? (settings.prePlanPermissionMode ?? 'normal')
+      : settings.permissionMode;
+    this.permissionSelectEl.disabled = isPlanMode;
+    this.permissionSelectEl.style.opacity = isPlanMode ? '0.6' : '';
+  }
+
+  setVisible(visible: boolean): void {
+    this.container.style.display = visible ? '' : 'none';
+  }
+}
+
+export class PermissionToggle implements ToolbarPermissionToggleLike {
+  private readonly callbacks: ToolbarCallbacks;
+  private readonly claudeToggle: ClaudePermissionToggle;
+  private readonly codexToggle: CodexPermissionToggle;
+
+  constructor(parentEl: HTMLElement, callbacks: ToolbarCallbacks) {
+    this.callbacks = callbacks;
+    this.claudeToggle = new ClaudePermissionToggle(parentEl, callbacks);
+    this.codexToggle = new CodexPermissionToggle(parentEl, callbacks);
+    this.syncVisibility();
+  }
+
+  private syncVisibility(): void {
+    const isCodex = this.callbacks.getSettings().backendId === 'codex';
+    this.claudeToggle.setVisible(!isCodex);
+    this.codexToggle.setVisible(isCodex);
+  }
+
+  updateDisplay() {
+    this.claudeToggle.updateDisplay();
+    this.codexToggle.updateDisplay();
+    this.syncVisibility();
   }
 }
 
@@ -591,6 +970,7 @@ export class ExternalContextSelector {
 
 export class McpServerSelector {
   private container: HTMLElement;
+  private forceHidden = false;
   private iconEl: HTMLElement | null = null;
   private badgeEl: HTMLElement | null = null;
   private dropdownEl: HTMLElement | null = null;
@@ -643,6 +1023,15 @@ export class McpServerSelector {
     this.pruneEnabledServers();
     this.updateDisplay();
     this.renderDropdown();
+  }
+
+  setVisible(visible: boolean): void {
+    this.forceHidden = !visible;
+    if (!visible) {
+      this.container.style.display = 'none';
+      return;
+    }
+    this.updateDisplay();
   }
 
   private pruneEnabledServers(): void {
@@ -769,6 +1158,11 @@ export class McpServerSelector {
   updateDisplay() {
     this.pruneEnabledServers();
     if (!this.iconEl || !this.badgeEl) return;
+
+    if (this.forceHidden) {
+      this.container.style.display = 'none';
+      return;
+    }
 
     const count = this.enabledServers.size;
     const hasServers = (this.mcpManager?.getServers().length || 0) > 0;

@@ -73,6 +73,8 @@ export type TranslationKey =
   // Settings - Customization
   | 'settings.title'
   | 'settings.customization'
+  | 'settings.backend.name'
+  | 'settings.backend.desc'
   | 'settings.userName.name'
   | 'settings.userName.desc'
   | 'settings.excludedTags.name'

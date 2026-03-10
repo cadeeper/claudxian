@@ -14,6 +14,7 @@ import { PluginManager } from './core/plugins';
 import { StorageService } from './core/storage';
 import { isSubagentToolName, TOOL_TASK } from './core/tools/toolNames';
 import type {
+  BackendId,
   ChatMessage,
   ClaudianSettings,
   Conversation,
@@ -22,10 +23,13 @@ import type {
   SubagentInfo,
 } from './core/types';
 import {
+  BACKEND_CLAUDE,
   DEFAULT_CLAUDE_MODELS,
   DEFAULT_SETTINGS,
+  getBackendCapabilities,
   getCliPlatformKey,
   getHostnameKey,
+  normalizeBackendId,
   VIEW_TYPE_CLAUDIAN,
 } from './core/types';
 import { ClaudianView } from './features/chat/ClaudianView';
@@ -81,7 +85,7 @@ export default class ClaudianPlugin extends Plugin {
       (leaf) => new ClaudianView(leaf, this)
     );
 
-    this.addRibbonIcon('bot', 'Open Claudian', () => {
+    this.addRibbonIcon('bot', 'Open Claudxian', () => {
       this.activateView();
     });
 
@@ -246,6 +250,8 @@ export default class ClaudianPlugin extends Plugin {
       slashCommands,
     };
 
+    this.settings.defaultBackend = normalizeBackendId(this.settings.defaultBackend, BACKEND_CLAUDE);
+
     // Plan mode is ephemeral — normalize back to normal on load so the app
     // doesn't start stuck in plan mode after a restart (prePlanPermissionMode is lost)
     if (this.settings.permissionMode === 'plan') {
@@ -281,6 +287,7 @@ export default class ClaudianPlugin extends Plugin {
       const meta = await this.storage.sessions.loadMetadata(conversation.id);
       if (!meta) continue;
 
+      conversation.backendId = this.normalizeConversationBackendId(meta.backendId ?? conversation.backendId);
       conversation.isNative = true;
       conversation.title = meta.title ?? conversation.title;
       conversation.titleGenerationStatus = meta.titleGenerationStatus ?? conversation.titleGenerationStatus;
@@ -317,6 +324,7 @@ export default class ClaudianPlugin extends Plugin {
           : (resumeSessionId ?? undefined);
 
         return {
+          backendId: this.normalizeConversationBackendId(meta.backendId),
           id: meta.id,
           title: meta.title,
           createdAt: meta.createdAt,
@@ -547,6 +555,7 @@ export default class ClaudianPlugin extends Plugin {
     // NOTE: sdkSessionId is retained for loading SDK-stored history.
     const invalidatedConversations: Conversation[] = [];
     for (const conv of this.conversations) {
+      if (conv.backendId !== BACKEND_CLAUDE) continue;
       if (conv.sessionId) {
         conv.sessionId = null;
         invalidatedConversations.push(conv);
@@ -564,6 +573,10 @@ export default class ClaudianPlugin extends Plugin {
 
     this.settings.lastEnvHash = currentHash;
     return { changed: true, invalidatedConversations };
+  }
+
+  private normalizeConversationBackendId(backendId: unknown): BackendId {
+    return normalizeBackendId(backendId, BACKEND_CLAUDE);
   }
 
   private generateConversationId(): string {
@@ -881,27 +894,33 @@ export default class ClaudianPlugin extends Plugin {
   /**
    * Creates a new conversation and sets it as active.
    *
-   * New conversations always use SDK-native storage.
-   * The session ID may be captured after the first SDK response.
+   * Backends with native history support store metadata only; backends without
+   * native history are persisted as JSONL from the start.
    */
-  async createConversation(sessionId?: string): Promise<Conversation> {
+  async createConversation(sessionId?: string, backendId: BackendId = this.settings.defaultBackend): Promise<Conversation> {
     const conversationId = sessionId ?? this.generateConversationId();
+    const supportsNativeHistory = getBackendCapabilities(backendId).supportsNativeHistory;
     const conversation: Conversation = {
+      backendId,
       id: conversationId,
       title: this.generateDefaultTitle(),
       createdAt: Date.now(),
       updatedAt: Date.now(),
       sessionId: sessionId ?? null,
-      sdkSessionId: sessionId ?? undefined,
+      sdkSessionId: supportsNativeHistory ? sessionId ?? undefined : undefined,
       messages: [],
-      isNative: true,
+      isNative: supportsNativeHistory || undefined,
     };
 
     this.conversations.unshift(conversation);
-    // Save new conversation (metadata only - SDK handles messages)
-    await this.storage.sessions.saveMetadata(
-      this.storage.sessions.toSessionMetadata(conversation)
-    );
+
+    if (conversation.isNative) {
+      await this.storage.sessions.saveMetadata(
+        this.storage.sessions.toSessionMetadata(conversation)
+      );
+    } else {
+      await this.storage.sessions.saveConversation(conversation);
+    }
 
     return conversation;
   }
@@ -1049,6 +1068,7 @@ export default class ClaudianPlugin extends Plugin {
   /** Returns conversation metadata list for the history dropdown. */
   getConversationList(): ConversationMeta[] {
     return this.conversations.map(c => ({
+      backendId: c.backendId,
       id: c.id,
       title: c.title,
       createdAt: c.createdAt,
