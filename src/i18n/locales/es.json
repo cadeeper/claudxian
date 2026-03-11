@@ -287,6 +287,38 @@
     "language": {
       "name": "Idioma",
       "desc": "Cambiar el idioma de visualización de la interfaz del plugin"
+    },
+    "common": "Common",
+    "claude": {
+      "title": "Claude Code"
+    },
+    "codex": {
+      "title": "Codex",
+      "cliDetection": {
+        "name": "Codex CLI detection",
+        "resolved": "Resolved executable: {path}",
+        "missing": "No executable detected. Auto-detection checks PATH and common install locations."
+      },
+      "cliPath": {
+        "name": "Codex CLI path",
+        "desc": "Custom path to the Codex CLI for this device. Leave empty for auto-detection from PATH and common install locations."
+      },
+      "model": {
+        "name": "Codex model",
+        "desc": "Optional model passed to the Codex CLI via --model."
+      },
+      "quickModels": {
+        "name": "Codex quick models",
+        "desc": "One model id per line. These appear in the chat model selector when Codex is active."
+      },
+      "reasoning": {
+        "name": "Codex reasoning",
+        "desc": "Reasoning effort for normal Codex turns."
+      },
+      "planReasoning": {
+        "name": "Codex plan reasoning",
+        "desc": "Reasoning effort used while Codex is in plan mode."
+      }
     }
   }
 }

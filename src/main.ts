@@ -37,6 +37,7 @@ import { type InlineEditContext, InlineEditModal } from './features/inline-edit/
 import { ClaudianSettingTab } from './features/settings/ClaudianSettings';
 import { setLocale } from './i18n';
 import { ClaudeCliResolver } from './utils/claudeCli';
+import { resolveConfiguredCodexCliPath } from './utils/codexCli';
 import { buildCursorContext } from './utils/editor';
 import { getCurrentModelFromEnvironment, getModelsFromEnvironment, parseEnvironmentVariables } from './utils/env';
 import { getVaultPath } from './utils/path';
@@ -494,6 +495,14 @@ export default class ClaudianPlugin extends Plugin {
     return this.cliResolver.resolve(
       this.settings.claudeCliPathsByHost,  // Per-device paths (preferred)
       this.settings.claudeCliPath,          // Legacy path (fallback)
+      this.getActiveEnvironmentVariables()
+    );
+  }
+
+  getResolvedCodexCliPath(): string | null {
+    return resolveConfiguredCodexCliPath(
+      this.settings.codexCliPathsByHost,
+      this.settings.codexCliPath,
       this.getActiveEnvironmentVariables()
     );
   }

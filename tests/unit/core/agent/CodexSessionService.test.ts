@@ -5,7 +5,6 @@ import { PassThrough } from 'stream';
 import { CodexSessionService } from '@/core/agent/CodexSessionService';
 import type { McpServerManager } from '@/core/mcp';
 import type ClaudianPlugin from '@/main';
-import * as codexCli from '@/utils/codexCli';
 
 jest.mock('child_process', () => ({
   spawn: jest.fn(),
@@ -65,8 +64,6 @@ describe('CodexSessionService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.spyOn(codexCli, 'resolveCodexCliPath').mockReturnValue('/usr/local/bin/codex');
-
     mockPlugin = {
       app: {
         vault: { adapter: { basePath: '/mock/vault/path' } },
@@ -78,6 +75,7 @@ describe('CodexSessionService', () => {
         codexPlanModeReasoningEffort: '',
       },
       getActiveEnvironmentVariables: jest.fn().mockReturnValue(''),
+      getResolvedCodexCliPath: jest.fn().mockReturnValue('/usr/local/bin/codex'),
     } as unknown as ClaudianPlugin;
 
     mockMcpManager = {

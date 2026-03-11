@@ -504,6 +504,10 @@ function initializeInputToolbar(tab: TabData, plugin: ClaudianPlugin): void {
       await plugin.saveSettings();
       updateTabBackendUI(tab, plugin);
     },
+    onAttachActiveFile: () => {
+      tab.ui.fileContextManager?.attachActiveFileForNextMessage();
+      dom.inputEl.focus();
+    },
   });
 
   tab.ui.modelSelector = toolbarComponents.modelSelector;

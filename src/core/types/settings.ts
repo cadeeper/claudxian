@@ -312,6 +312,8 @@ export interface ClaudianSettings {
   // CLI paths
   claudeCliPath: string;  // Legacy: single CLI path (for backwards compatibility)
   claudeCliPathsByHost: HostnameCliPaths;  // Per-device paths keyed by hostname (preferred)
+  codexCliPath: string;  // Legacy: single Codex CLI path (for backwards compatibility)
+  codexCliPathsByHost: HostnameCliPaths;  // Per-device Codex CLI paths keyed by hostname
   loadUserClaudeSettings: boolean;  // Load ~/.claude/settings.json (may override permissions)
 
   // State (merged from data.json)
@@ -381,6 +383,8 @@ export const DEFAULT_SETTINGS: ClaudianSettings = {
   // CLI paths
   claudeCliPath: '',  // Legacy field (empty = not migrated)
   claudeCliPathsByHost: {},  // Per-device paths keyed by hostname
+  codexCliPath: '',  // Legacy field (empty = not migrated)
+  codexCliPathsByHost: {},  // Per-device paths keyed by hostname
   loadUserClaudeSettings: true,  // Default on for compatibility
 
   lastClaudeModel: 'haiku',

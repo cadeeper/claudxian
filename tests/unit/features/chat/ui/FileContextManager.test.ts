@@ -156,6 +156,31 @@ describe('FileContextManager', () => {
     manager.destroy();
   });
 
+  it('re-attaches active file for the next message in an existing session', () => {
+    const app = createMockApp({
+      files: ['notes/alpha.md', 'notes/beta.md'],
+      activeFilePath: 'notes/alpha.md',
+    });
+    const manager = new FileContextManager(
+      app,
+      containerEl as any,
+      inputEl,
+      createMockCallbacks()
+    );
+
+    manager.autoAttachActiveFile();
+    manager.markCurrentNoteSent();
+    expect(manager.shouldSendCurrentNote()).toBe(false);
+
+    app.workspace.getActiveFile = jest.fn(() => createMockTFile('notes/beta.md'));
+
+    expect(manager.attachActiveFileForNextMessage()).toBe(true);
+    expect(manager.getCurrentNotePath()).toBe('notes/beta.md');
+    expect(manager.shouldSendCurrentNote()).toBe(true);
+
+    manager.destroy();
+  });
+
   it('should NOT resend current note when loading conversation with existing messages', () => {
     const app = createMockApp();
     const manager = new FileContextManager(

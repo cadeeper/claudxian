@@ -213,7 +213,7 @@
     "environment": "Environment",
     "customVariables": {
       "name": "Custom variables",
-      "desc": "Environment variables for Claude SDK (KEY=VALUE format, one per line). Shell export prefix supported."
+      "desc": "Environment variables injected into Claude Code and Codex CLI processes (KEY=VALUE format, one per line). Shell export prefix supported."
     },
     "envSnippets": {
       "name": "Snippets",
@@ -257,7 +257,7 @@
     },
     "maxTabs": {
       "name": "Maximum chat tabs",
-      "desc": "Maximum number of concurrent chat tabs (3-10). Each tab uses a separate Claude session.",
+      "desc": "Maximum number of concurrent chat tabs (3-10). Each tab uses a separate backend session.",
       "warning": "More than 5 tabs may impact performance and memory usage."
     },
     "tabBarPosition": {
@@ -268,7 +268,7 @@
     },
     "enableAutoScroll": {
       "name": "Auto-scroll during streaming",
-      "desc": "Automatically scroll to the bottom as Claude streams responses. Disable to stay at the top and read from the beginning."
+      "desc": "Automatically scroll to the bottom while the active backend streams responses. Disable to stay at the top and read from the beginning."
     },
     "openInMainTab": {
       "name": "Open in main editor area",
@@ -287,6 +287,38 @@
     "language": {
       "name": "Language",
       "desc": "Change the display language of the plugin interface"
+    },
+    "common": "Common",
+    "claude": {
+      "title": "Claude Code"
+    },
+    "codex": {
+      "title": "Codex",
+      "cliDetection": {
+        "name": "Codex CLI detection",
+        "resolved": "Resolved executable: {path}",
+        "missing": "No executable detected. Auto-detection checks PATH and common install locations."
+      },
+      "cliPath": {
+        "name": "Codex CLI path",
+        "desc": "Custom path to the Codex CLI for this device. Leave empty for auto-detection from PATH and common install locations."
+      },
+      "model": {
+        "name": "Codex model",
+        "desc": "Optional model passed to the Codex CLI via --model."
+      },
+      "quickModels": {
+        "name": "Codex quick models",
+        "desc": "One model id per line. These appear in the chat model selector when Codex is active."
+      },
+      "reasoning": {
+        "name": "Codex reasoning",
+        "desc": "Reasoning effort for normal Codex turns."
+      },
+      "planReasoning": {
+        "name": "Codex plan reasoning",
+        "desc": "Reasoning effort used while Codex is in plan mode."
+      }
     }
   }
 }

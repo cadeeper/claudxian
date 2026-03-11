@@ -44,6 +44,8 @@ export const CLAUDIAN_ONLY_FIELDS = new Set([
   // CLI paths
   'claudeCliPath',
   'claudeCliPaths',
+  'codexCliPath',
+  'codexCliPathsByHost',
   'loadUserClaudeSettings',
 
   // Deprecated fields (removed completely, not migrated)
@@ -77,6 +79,8 @@ export const MIGRATABLE_CLAUDIAN_FIELDS = new Set([
   'keyboardNavigation',
   'claudeCliPath',
   'claudeCliPaths',
+  'codexCliPath',
+  'codexCliPathsByHost',
   'loadUserClaudeSettings',
 ]);
 

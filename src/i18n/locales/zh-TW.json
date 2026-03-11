@@ -287,6 +287,38 @@
     "language": {
       "name": "語言",
       "desc": "更改插件介面的顯示語言"
+    },
+    "common": "通用",
+    "claude": {
+      "title": "Claude Code"
+    },
+    "codex": {
+      "title": "Codex",
+      "cliDetection": {
+        "name": "Codex CLI 偵測",
+        "resolved": "解析到的可執行檔：{path}",
+        "missing": "未偵測到可執行檔。自動偵測會檢查 PATH 與常見安裝位置。"
+      },
+      "cliPath": {
+        "name": "Codex CLI 路徑",
+        "desc": "目前裝置上的 Codex CLI 自訂路徑。留空則從 PATH 與常見安裝位置自動偵測。"
+      },
+      "model": {
+        "name": "Codex 模型",
+        "desc": "可選，作為 --model 傳給 Codex CLI 的模型。"
+      },
+      "quickModels": {
+        "name": "Codex 快捷模型",
+        "desc": "每行一個模型 ID。啟用 Codex 時，這些模型會顯示在聊天模型選擇器中。"
+      },
+      "reasoning": {
+        "name": "Codex 推理強度",
+        "desc": "Codex 一般對話時使用的推理強度。"
+      },
+      "planReasoning": {
+        "name": "Codex 規劃推理強度",
+        "desc": "Codex 處於 plan 模式時使用的推理強度。"
+      }
     }
   }
 }

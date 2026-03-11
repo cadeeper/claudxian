@@ -35,6 +35,12 @@ describe('FileContextState', () => {
       state.markCurrentNoteSent();
       expect(state.hasSentCurrentNote()).toBe(true);
     });
+
+    it('should reset current note send state', () => {
+      state.markCurrentNoteSent();
+      state.resetCurrentNoteSent();
+      expect(state.hasSentCurrentNote()).toBe(false);
+    });
   });
 
   describe('resetForNewConversation', () => {

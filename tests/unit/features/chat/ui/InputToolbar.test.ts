@@ -35,6 +35,7 @@ function createMockCallbacks(overrides: Record<string, any> = {}) {
     onModelChange: jest.fn().mockResolvedValue(undefined),
     onReasoningChange: jest.fn().mockResolvedValue(undefined),
     onPermissionModeChange: jest.fn().mockResolvedValue(undefined),
+    onAttachActiveFile: jest.fn().mockResolvedValue(undefined),
     getSettings: jest.fn().mockReturnValue({
       backendId: 'claude',
       model: 'sonnet',
@@ -410,7 +411,7 @@ describe('Codex toolbar components', () => {
     expect(current?.textContent).toBe('None');
   });
 
-  it('renders Codex mode/access dropdowns and changes mode', async () => {
+  it('renders Codex mode/access switches and changes mode', async () => {
     const parentEl = createMockEl();
     const callbacks = createMockCallbacks({
       getSettings: jest.fn().mockReturnValue({
@@ -426,20 +427,48 @@ describe('Codex toolbar components', () => {
 
     new CodexPermissionToggle(parentEl, callbacks);
 
-    const selects = parentEl.querySelectorAll('.claudian-permission-select');
-    expect(selects.length).toBe(2);
+    const switches = parentEl.querySelectorAll('.claudian-toggle-switch');
+    expect(switches.length).toBe(2);
 
-    const modeSelect = Array.from(selects).find((item: any) => item.hasClass('claudian-permission-select--mode')) as any;
-    const accessSelect = Array.from(selects).find((item: any) => item.hasClass('claudian-permission-select--access')) as any;
-    expect(parentEl.querySelectorAll('.claudian-permission-label').length).toBe(0);
-    expect(modeSelect?.getAttribute('aria-label')).toBe('Codex mode');
-    expect(accessSelect?.getAttribute('aria-label')).toBe('Codex access');
-    expect(modeSelect?.value).toBe('agent');
-    expect(accessSelect?.value).toBe('normal');
+    const modeGroup = parentEl.querySelector('.claudian-permission-switch-group--mode');
+    const accessGroup = parentEl.querySelector('.claudian-permission-switch-group--access');
+    const modeLabel = modeGroup?.querySelector('.claudian-permission-label');
+    const accessLabel = accessGroup?.querySelector('.claudian-permission-label');
+    const modeToggle = modeGroup?.querySelector('.claudian-toggle-switch') as any;
+    const accessToggle = accessGroup?.querySelector('.claudian-toggle-switch') as any;
 
-    modeSelect.value = 'plan';
-    await modeSelect?.dispatchEvent('change', { stopPropagation: () => {} });
+    expect(modeToggle?.getAttribute('aria-label')).toBe('Codex mode');
+    expect(accessToggle?.getAttribute('aria-label')).toBe('Codex access');
+    expect(modeLabel?.textContent).toBe('Agent');
+    expect(accessLabel?.textContent).toBe('Safe');
+    expect(modeToggle?.hasClass('active')).toBe(false);
+    expect(accessToggle?.hasClass('active')).toBe(false);
+
+    await modeToggle?.dispatchEvent('click', { stopPropagation: () => {} });
     expect(callbacks.onPermissionModeChange).toHaveBeenCalledWith('plan');
+  });
+
+  it('toggles Codex access switch between safe and yolo', async () => {
+    const parentEl = createMockEl();
+    const callbacks = createMockCallbacks({
+      getSettings: jest.fn().mockReturnValue({
+        backendId: 'codex',
+        model: '',
+        modelOptions: [{ value: '', label: 'Default', description: 'Default model' }],
+        codexReasoningEffort: 'low',
+        codexPlanModeReasoningEffort: 'high',
+        prePlanPermissionMode: 'normal',
+        permissionMode: 'normal',
+      }),
+    });
+
+    new CodexPermissionToggle(parentEl, callbacks);
+
+    const accessGroup = parentEl.querySelector('.claudian-permission-switch-group--access');
+    const accessToggle = accessGroup?.querySelector('.claudian-toggle-switch') as any;
+
+    await accessToggle?.dispatchEvent('click', { stopPropagation: () => {} });
+    expect(callbacks.onPermissionModeChange).toHaveBeenCalledWith('yolo');
   });
 
   it('restores Codex agent access from pre-plan mode', async () => {
@@ -458,14 +487,21 @@ describe('Codex toolbar components', () => {
 
     new CodexPermissionToggle(parentEl, callbacks);
 
-    const modeSelect = parentEl.querySelector('.claudian-permission-select--mode') as any;
-    const accessSelect = parentEl.querySelector('.claudian-permission-select--access') as any;
-    expect(modeSelect?.value).toBe('plan');
-    expect(accessSelect?.value).toBe('yolo');
-    expect(accessSelect?.disabled).toBe(true);
+    const modeGroup = parentEl.querySelector('.claudian-permission-switch-group--mode');
+    const accessGroup = parentEl.querySelector('.claudian-permission-switch-group--access');
+    const modeLabel = modeGroup?.querySelector('.claudian-permission-label');
+    const accessLabel = accessGroup?.querySelector('.claudian-permission-label');
+    const modeToggle = modeGroup?.querySelector('.claudian-toggle-switch') as any;
+    const accessToggle = accessGroup?.querySelector('.claudian-toggle-switch') as any;
 
-    modeSelect.value = 'agent';
-    await modeSelect?.dispatchEvent('change', { stopPropagation: () => {} });
+    expect(modeLabel?.textContent).toBe('PLAN');
+    expect(modeLabel?.hasClass('plan-active')).toBe(true);
+    expect(accessLabel?.textContent).toBe('YOLO');
+    expect(accessGroup?.hasClass('is-disabled')).toBe(true);
+    expect(accessToggle?.disabled).toBe(true);
+    expect(accessToggle?.hasClass('active')).toBe(true);
+
+    await modeToggle?.dispatchEvent('click', { stopPropagation: () => {} });
     expect(callbacks.onPermissionModeChange).toHaveBeenCalledWith('yolo');
   });
 });
@@ -813,5 +849,17 @@ describe('createInputToolbar', () => {
     expect(toolbar.contextUsageMeter).toBeInstanceOf(ContextUsageMeter);
     expect(toolbar.mcpServerSelector).toBeInstanceOf(McpServerSelector);
     expect(toolbar.permissionToggle).toBeInstanceOf(PermissionToggle);
+  });
+
+  it('should render active note button and call onAttachActiveFile when clicked', () => {
+    const parentEl = createMockEl();
+    const callbacks = createMockCallbacks();
+    createInputToolbar(parentEl, callbacks);
+
+    const button = parentEl.querySelector('.claudian-active-note-button-icon');
+    expect(button).not.toBeNull();
+
+    button?.dispatchEvent('click', { stopPropagation: jest.fn() });
+    expect(callbacks.onAttachActiveFile).toHaveBeenCalled();
   });
 });

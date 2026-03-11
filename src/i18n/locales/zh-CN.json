@@ -213,7 +213,7 @@
     "environment": "环境",
     "customVariables": {
       "name": "自定义变量",
-      "desc": "Claude SDK 的环境变量（KEY=VALUE 格式，每行一个）。支持 export 前缀。"
+      "desc": "注入到 Claude Code 与 Codex CLI 进程的环境变量（KEY=VALUE 格式，每行一个）。支持 export 前缀。"
     },
     "envSnippets": {
       "name": "片段",
@@ -257,7 +257,7 @@
     },
     "maxTabs": {
       "name": "最大聊天标签数",
-      "desc": "同时开启的最大聊天标签数（3-10）。每个标签使用独立的 Claude 会话。",
+      "desc": "同时开启的最大聊天标签数（3-10）。每个标签使用独立的后端会话。",
       "warning": "超过 5 个标签可能会影响性能和内存使用。"
     },
     "tabBarPosition": {
@@ -268,7 +268,7 @@
     },
     "enableAutoScroll": {
       "name": "流式传输时自动滚动",
-      "desc": "在 Claude 流式传输响应时自动滚动到底部。禁用后将停留在顶部，从头开始阅读。"
+      "desc": "在当前后端流式传输响应时自动滚动到底部。禁用后将停留在顶部，从头开始阅读。"
     },
     "openInMainTab": {
       "name": "在主编辑器区域打开",
@@ -287,6 +287,38 @@
     "language": {
       "name": "语言",
       "desc": "更改插件界面的显示语言"
+    },
+    "common": "通用",
+    "claude": {
+      "title": "Claude Code"
+    },
+    "codex": {
+      "title": "Codex",
+      "cliDetection": {
+        "name": "Codex CLI 检测",
+        "resolved": "解析到的可执行文件：{path}",
+        "missing": "未检测到可执行文件。自动检测会检查 PATH 和常见安装位置。"
+      },
+      "cliPath": {
+        "name": "Codex CLI 路径",
+        "desc": "当前设备上的 Codex CLI 自定义路径。留空则从 PATH 和常见安装位置自动检测。"
+      },
+      "model": {
+        "name": "Codex 模型",
+        "desc": "可选，作为 --model 传给 Codex CLI 的模型。"
+      },
+      "quickModels": {
+        "name": "Codex 快捷模型",
+        "desc": "每行一个模型 ID。启用 Codex 时，这些模型会显示在聊天模型选择器中。"
+      },
+      "reasoning": {
+        "name": "Codex 推理强度",
+        "desc": "Codex 普通对话时使用的推理强度。"
+      },
+      "planReasoning": {
+        "name": "Codex 规划推理强度",
+        "desc": "Codex 处于 plan 模式时使用的推理强度。"
+      }
     }
   }
 }

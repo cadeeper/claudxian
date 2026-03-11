@@ -56,6 +56,7 @@ export interface ToolbarCallbacks {
   onModelChange: (model: ClaudeModel) => Promise<void>;
   onReasoningChange: (value: ToolbarReasoningValue) => Promise<void>;
   onPermissionModeChange: (mode: PermissionMode) => Promise<void>;
+  onAttachActiveFile?: () => Promise<void> | void;
   getSettings: () => ToolbarSettings;
   getEnvironmentVariables?: () => string;
 }
@@ -492,8 +493,12 @@ export class ClaudePermissionToggle implements ToolbarPermissionToggleLike {
 export class CodexPermissionToggle implements ToolbarPermissionToggleLike {
   private container: HTMLElement;
   private callbacks: ToolbarCallbacks;
-  private modeSelectEl: HTMLSelectElement | null = null;
-  private permissionSelectEl: HTMLSelectElement | null = null;
+  private modeGroupEl: HTMLElement | null = null;
+  private modeLabelEl: HTMLElement | null = null;
+  private modeToggleEl: HTMLButtonElement | null = null;
+  private accessGroupEl: HTMLElement | null = null;
+  private accessLabelEl: HTMLElement | null = null;
+  private accessToggleEl: HTMLButtonElement | null = null;
 
   constructor(parentEl: HTMLElement, callbacks: ToolbarCallbacks) {
     this.callbacks = callbacks;
@@ -505,88 +510,114 @@ export class CodexPermissionToggle implements ToolbarPermissionToggleLike {
   private render() {
     this.container.empty();
 
-    const modeGroupEl = this.container.createDiv({ cls: 'claudian-permission-group' });
-    this.modeSelectEl = modeGroupEl.createEl('select', {
-      cls: 'claudian-permission-select claudian-permission-select--mode',
-    }) as HTMLSelectElement;
-    this.modeSelectEl.setAttribute('aria-label', 'Codex mode');
-    this.modeSelectEl.setAttribute('title', 'Mode');
-    this.createOption(this.modeSelectEl, 'agent', 'Agent');
-    this.createOption(this.modeSelectEl, 'plan', 'Plan');
-
-    const permissionGroupEl = this.container.createDiv({ cls: 'claudian-permission-group' });
-    this.permissionSelectEl = permissionGroupEl.createEl('select', {
-      cls: 'claudian-permission-select claudian-permission-select--access',
-    }) as HTMLSelectElement;
-    this.permissionSelectEl.setAttribute('aria-label', 'Codex access');
-    this.permissionSelectEl.setAttribute('title', 'Access');
-    this.createOption(this.permissionSelectEl, 'normal', 'Safe');
-    this.createOption(this.permissionSelectEl, 'yolo', 'YOLO');
-
-    this.modeSelectEl.addEventListener('change', async (e) => {
+    const modeGroup = this.createSwitchGroup('claudian-permission-switch-group--mode', 'Codex mode');
+    this.modeGroupEl = modeGroup.groupEl;
+    this.modeLabelEl = modeGroup.labelEl;
+    this.modeToggleEl = modeGroup.toggleEl;
+    this.modeToggleEl.addEventListener('click', async (e) => {
       e.stopPropagation();
-      const nextMode = this.modeSelectEl?.value;
-      if (!nextMode) {
-        this.updateDisplay();
-        return;
-      }
-
-      const settings = this.callbacks.getSettings();
-      if (!isCodexToolbarSettings(settings)) {
-        return;
-      }
-
-      const targetPermissionMode: PermissionMode = nextMode === 'plan'
-        ? 'plan'
-        : (settings.prePlanPermissionMode ?? 'normal');
-
-      if (settings.permissionMode === targetPermissionMode) {
-        this.updateDisplay();
-        return;
-      }
-
-      await this.callbacks.onPermissionModeChange(targetPermissionMode);
-      this.updateDisplay();
+      await this.toggleMode();
     });
 
-    this.permissionSelectEl.addEventListener('change', async (e) => {
+    const accessGroup = this.createSwitchGroup('claudian-permission-switch-group--access', 'Codex access');
+    this.accessGroupEl = accessGroup.groupEl;
+    this.accessLabelEl = accessGroup.labelEl;
+    this.accessToggleEl = accessGroup.toggleEl;
+    this.accessToggleEl.addEventListener('click', async (e) => {
       e.stopPropagation();
-      const nextMode = this.permissionSelectEl?.value as PermissionMode | undefined;
-      const settings = this.callbacks.getSettings();
-      if (!nextMode || settings.permissionMode === 'plan' || settings.permissionMode === nextMode) {
-        this.updateDisplay();
-        return;
-      }
-
-      await this.callbacks.onPermissionModeChange(nextMode);
-      this.updateDisplay();
+      await this.toggleAccess();
     });
 
     this.updateDisplay();
   }
 
-  private createOption(selectEl: HTMLSelectElement | null, value: string, label: string): void {
-    const optionEl = selectEl?.createEl('option', { text: label }) as HTMLOptionElement | null;
-    if (!optionEl) {
+  private createSwitchGroup(modifierClass: string, ariaLabel: string): {
+    groupEl: HTMLElement;
+    labelEl: HTMLElement;
+    toggleEl: HTMLButtonElement;
+  } {
+    const groupEl = this.container.createDiv({ cls: 'claudian-permission-switch-group' });
+    groupEl.addClass(modifierClass);
+
+    const labelEl = groupEl.createSpan({ cls: 'claudian-permission-label' });
+    const toggleEl = groupEl.createEl('button', { cls: 'claudian-toggle-switch' }) as HTMLButtonElement;
+    toggleEl.setAttribute('type', 'button');
+    toggleEl.setAttribute('role', 'switch');
+    toggleEl.setAttribute('aria-label', ariaLabel);
+
+    return { groupEl, labelEl, toggleEl };
+  }
+
+  private syncSwitch(toggleEl: HTMLButtonElement | null, active: boolean, disabled: boolean): void {
+    if (!toggleEl) {
       return;
     }
 
-    optionEl.value = value;
+    toggleEl.toggleClass('active', active);
+    toggleEl.toggleClass('is-disabled', disabled);
+    toggleEl.disabled = disabled;
+    toggleEl.setAttribute('aria-checked', active ? 'true' : 'false');
+    toggleEl.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+  }
+
+  private async toggleMode(): Promise<void> {
+    const settings = this.callbacks.getSettings();
+    if (!isCodexToolbarSettings(settings)) {
+      return;
+    }
+
+    const nextMode: PermissionMode = settings.permissionMode === 'plan'
+      ? (settings.prePlanPermissionMode ?? 'normal')
+      : 'plan';
+
+    if (settings.permissionMode === nextMode) {
+      this.updateDisplay();
+      return;
+    }
+
+    await this.callbacks.onPermissionModeChange(nextMode);
+    this.updateDisplay();
+  }
+
+  private async toggleAccess(): Promise<void> {
+    const settings = this.callbacks.getSettings();
+    if (!isCodexToolbarSettings(settings) || settings.permissionMode === 'plan') {
+      this.updateDisplay();
+      return;
+    }
+
+    const nextMode: PermissionMode = settings.permissionMode === 'yolo' ? 'normal' : 'yolo';
+    await this.callbacks.onPermissionModeChange(nextMode);
+    this.updateDisplay();
   }
 
   updateDisplay() {
     const settings = this.callbacks.getSettings();
-    if (!this.modeSelectEl || !this.permissionSelectEl || !isCodexToolbarSettings(settings)) {
+    if (
+      !this.modeGroupEl ||
+      !this.modeLabelEl ||
+      !this.modeToggleEl ||
+      !this.accessGroupEl ||
+      !this.accessLabelEl ||
+      !this.accessToggleEl ||
+      !isCodexToolbarSettings(settings)
+    ) {
       return;
     }
 
     const isPlanMode = settings.permissionMode === 'plan';
-    this.modeSelectEl.value = isPlanMode ? 'plan' : 'agent';
-    this.permissionSelectEl.value = isPlanMode
+    const accessMode = isPlanMode
       ? (settings.prePlanPermissionMode ?? 'normal')
       : settings.permissionMode;
-    this.permissionSelectEl.disabled = isPlanMode;
-    this.permissionSelectEl.style.opacity = isPlanMode ? '0.6' : '';
+
+    this.modeLabelEl.setText(isPlanMode ? 'PLAN' : 'Agent');
+    this.modeLabelEl.toggleClass('plan-active', isPlanMode);
+    this.syncSwitch(this.modeToggleEl, isPlanMode, false);
+
+    this.accessLabelEl.setText(accessMode === 'yolo' ? 'YOLO' : 'Safe');
+    this.accessLabelEl.removeClass('plan-active');
+    this.accessGroupEl.toggleClass('is-disabled', isPlanMode);
+    this.syncSwitch(this.accessToggleEl, accessMode === 'yolo', isPlanMode);
   }
 
   setVisible(visible: boolean): void {
@@ -616,6 +647,31 @@ export class PermissionToggle implements ToolbarPermissionToggleLike {
     this.claudeToggle.updateDisplay();
     this.codexToggle.updateDisplay();
     this.syncVisibility();
+  }
+}
+
+class ActiveNoteAttachButton {
+  private readonly container: HTMLElement;
+  private readonly buttonEl: HTMLButtonElement;
+  private readonly callbacks: ToolbarCallbacks;
+
+  constructor(parentEl: HTMLElement, callbacks: ToolbarCallbacks) {
+    this.callbacks = callbacks;
+    this.container = parentEl.createDiv({ cls: 'claudian-active-note-button' });
+    this.buttonEl = this.container.createEl('button', { cls: 'claudian-active-note-button-icon' }) as HTMLButtonElement;
+    this.buttonEl.setAttribute('type', 'button');
+    this.buttonEl.setAttribute('aria-label', 'Add current note to context');
+    this.buttonEl.setAttribute('title', 'Add current note to context');
+    setIcon(this.buttonEl, 'file-plus');
+
+    this.buttonEl.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+    });
+
+    this.buttonEl.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await this.callbacks.onAttachActiveFile?.();
+    });
   }
 }
 
@@ -1296,6 +1352,7 @@ export function createInputToolbar(
   const modelSelector = new ModelSelector(parentEl, callbacks);
   const thinkingBudgetSelector = new ThinkingBudgetSelector(parentEl, callbacks);
   const contextUsageMeter = new ContextUsageMeter(parentEl);
+  new ActiveNoteAttachButton(parentEl, callbacks);
   const externalContextSelector = new ExternalContextSelector(parentEl, callbacks);
   const mcpServerSelector = new McpServerSelector(parentEl);
   const permissionToggle = new PermissionToggle(parentEl, callbacks);

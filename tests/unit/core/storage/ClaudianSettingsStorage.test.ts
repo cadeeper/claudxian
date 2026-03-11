@@ -92,6 +92,32 @@ describe('ClaudianSettingsStorage', () => {
       expect(result.claudeCliPath).toBe('/legacy/path');
     });
 
+    it('should normalize codexCliPathsByHost from loaded data', async () => {
+      mockAdapter.exists.mockResolvedValue(true);
+      mockAdapter.read.mockResolvedValue(JSON.stringify({
+        codexCliPathsByHost: {
+          'host-a': '/custom/codex-a',
+          'host-b': '/custom/codex-b',
+        },
+      }));
+
+      const result = await storage.load();
+
+      expect(result.codexCliPathsByHost['host-a']).toBe('/custom/codex-a');
+      expect(result.codexCliPathsByHost['host-b']).toBe('/custom/codex-b');
+    });
+
+    it('should preserve legacy codexCliPath field', async () => {
+      mockAdapter.exists.mockResolvedValue(true);
+      mockAdapter.read.mockResolvedValue(JSON.stringify({
+        codexCliPath: '/legacy/codex',
+      }));
+
+      const result = await storage.load();
+
+      expect(result.codexCliPath).toBe('/legacy/codex');
+    });
+
     it('should throw on JSON parse error', async () => {
       mockAdapter.exists.mockResolvedValue(true);
       mockAdapter.read.mockResolvedValue('invalid json');

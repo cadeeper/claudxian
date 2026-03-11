@@ -2,7 +2,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-import { parseEnvironmentVariables } from './env';
+import type { HostnameCliPaths } from '../core/types/settings';
+import { getHostnameKey, parseEnvironmentVariables } from './env';
 import { expandHomePath, parsePathEntries, resolveNvmDefaultBin } from './path';
 
 function isExistingFile(filePath: string): boolean {
@@ -14,6 +15,20 @@ function isExistingFile(filePath: string): boolean {
     return fs.statSync(filePath).isFile();
   } catch {
     return false;
+  }
+}
+
+function resolveConfiguredPath(configuredPath: string | undefined): string | null {
+  const trimmed = (configuredPath ?? '').trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const expandedPath = expandHomePath(trimmed);
+    return isExistingFile(expandedPath) ? expandedPath : null;
+  } catch {
+    return null;
   }
 }
 
@@ -104,7 +119,23 @@ export function findCodexCliPath(pathValue?: string): string | null {
   return resolveCodexFromPathEntries(envEntries);
 }
 
-export function resolveCodexCliPath(envText: string): string | null {
+export function resolveConfiguredCodexCliPath(
+  hostnamePaths: HostnameCliPaths | undefined,
+  legacyPath: string | undefined,
+  envText: string
+): string | null {
+  const hostnameKey = getHostnameKey();
+  const hostnamePath = hostnamePaths?.[hostnameKey];
+
+  const configuredPath = resolveConfiguredPath(hostnamePath) ?? resolveConfiguredPath(legacyPath);
+  if (configuredPath) {
+    return configuredPath;
+  }
+
   const customEnv = parseEnvironmentVariables(envText || '');
   return findCodexCliPath(customEnv.PATH);
+}
+
+export function resolveCodexCliPath(envText: string): string | null {
+  return resolveConfiguredCodexCliPath(undefined, undefined, envText);
 }

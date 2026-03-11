@@ -7,7 +7,6 @@ import * as path from 'path';
 import * as readline from 'readline';
 
 import type ClaudianPlugin from '../../main';
-import { resolveCodexCliPath } from '../../utils/codexCli';
 import { stripCurrentNoteContext } from '../../utils/context';
 import { getEnhancedPath, parseEnvironmentVariables } from '../../utils/env';
 import { getVaultPath } from '../../utils/path';
@@ -222,7 +221,7 @@ export class CodexSessionService implements AgentSessionService {
       return;
     }
 
-    const codexPath = resolveCodexCliPath(this.plugin.getActiveEnvironmentVariables());
+    const codexPath = this.plugin.getResolvedCodexCliPath();
     if (!codexPath) {
       yield { type: 'error', content: 'Codex CLI not found. Please install Codex CLI and ensure it is on PATH.' };
       return;
@@ -273,7 +272,7 @@ export class CodexSessionService implements AgentSessionService {
   }
 
   isReady(): boolean {
-    return resolveCodexCliPath(this.plugin.getActiveEnvironmentVariables()) !== null;
+    return this.plugin.getResolvedCodexCliPath() !== null;
   }
 
   setSessionId(id: string | null, externalContextPaths?: string[]): void {

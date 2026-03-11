@@ -177,6 +177,32 @@ export class FileContextManager {
     }
   }
 
+  /** Re-attaches the currently focused file so it is sent with the next message. */
+  attachActiveFileForNextMessage(): boolean {
+    const activeFile = this.app.workspace.getActiveFile();
+    if (!activeFile) {
+      new Notice('No active note to add to context.');
+      return false;
+    }
+
+    if (this.hasExcludedTag(activeFile)) {
+      new Notice('Current note is excluded from context.');
+      return false;
+    }
+
+    const normalizedPath = this.normalizePathForVault(activeFile.path);
+    if (!normalizedPath) {
+      new Notice('Could not resolve current note path.');
+      return false;
+    }
+
+    this.currentNotePath = normalizedPath;
+    this.state.attachFile(normalizedPath);
+    this.state.resetCurrentNoteSent();
+    this.refreshCurrentNoteChip();
+    return true;
+  }
+
   /** Handles file open event. */
   handleFileOpen(file: TFile) {
     const normalizedPath = this.normalizePathForVault(file.path);

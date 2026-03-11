@@ -86,6 +86,8 @@ interface LegacySettingsJson {
   keyboardNavigation?: unknown;
   claudeCliPath?: string;
   claudeCliPaths?: unknown;
+  codexCliPath?: string;
+  codexCliPathsByHost?: unknown;
   loadUserClaudeSettings?: boolean;
   enableAutoTitleGeneration?: boolean;
   titleGenerationModel?: string;
@@ -241,6 +243,8 @@ export class StorageService {
       keyboardNavigation: oldSettings.keyboardNavigation as StoredClaudianSettings['keyboardNavigation'] ?? DEFAULT_SETTINGS.keyboardNavigation,
       claudeCliPath: oldSettings.claudeCliPath ?? DEFAULT_SETTINGS.claudeCliPath,
       claudeCliPathsByHost: DEFAULT_SETTINGS.claudeCliPathsByHost,  // Migration to hostname-based handled in main.ts
+      codexCliPath: oldSettings.codexCliPath ?? DEFAULT_SETTINGS.codexCliPath,
+      codexCliPathsByHost: oldSettings.codexCliPathsByHost as StoredClaudianSettings['codexCliPathsByHost'] ?? DEFAULT_SETTINGS.codexCliPathsByHost,
       loadUserClaudeSettings: oldSettings.loadUserClaudeSettings ?? DEFAULT_SETTINGS.loadUserClaudeSettings,
       enableAutoTitleGeneration: oldSettings.enableAutoTitleGeneration ?? DEFAULT_SETTINGS.enableAutoTitleGeneration,
       titleGenerationModel: oldSettings.titleGenerationModel ?? DEFAULT_SETTINGS.titleGenerationModel,

@@ -159,12 +159,12 @@ Use it like Claude Code or Codex—read, write, edit, and search files in your v
 - **Allowed export paths**: Paths outside the vault where files can be exported (default: `~/Desktop`, `~/Downloads`). Supports `~`, `$VAR`, `${VAR}`, and `%VAR%` (Windows).
 
 **Environment**
-- **Custom variables**: Environment variables for Claude SDK (KEY=VALUE format, supports `export ` prefix)
+- **Custom variables**: Environment variables injected into Claude Code and Codex CLI (KEY=VALUE format, supports `export ` prefix)
 - **Environment snippets**: Save and restore environment variable configurations
 
 **Advanced**
 - **Claude CLI path**: Custom path to Claude Code CLI (leave empty for auto-detection)
-- **Codex CLI path / detection**: Claudxian can auto-detect `codex` from common install locations or PATH
+- **Codex CLI path / detection**: Set a per-device Codex CLI path or rely on auto-detection from common install locations and PATH
 
 ## Safety and Permissions
 
