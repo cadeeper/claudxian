@@ -7,6 +7,7 @@ import * as path from 'path';
 import * as readline from 'readline';
 
 import type ClaudianPlugin from '../../main';
+import { type CodexApprovalFlagScope,detectCodexCliCapabilities } from '../../utils/codexCli';
 import { stripCurrentNoteContext } from '../../utils/context';
 import { getEnhancedPath, parseEnvironmentVariables } from '../../utils/env';
 import { getVaultPath } from '../../utils/path';
@@ -370,6 +371,7 @@ export class CodexSessionService implements AgentSessionService {
 
     try {
       const args = this.buildCodexArgs({
+        codexPath,
         imagePaths: tempImages.imagePaths,
         permissionMode: this.plugin.settings.permissionMode,
         prompt,
@@ -540,6 +542,7 @@ export class CodexSessionService implements AgentSessionService {
   }
 
   private buildCodexArgs(options: {
+    codexPath: string;
     imagePaths: string[];
     permissionMode: PermissionMode;
     prompt: string;
@@ -547,12 +550,21 @@ export class CodexSessionService implements AgentSessionService {
     resumeSessionId: string | null;
     vaultPath: string;
   }): string[] {
-    const { imagePaths, permissionMode, queryOptions, resumeSessionId, vaultPath } = options;
+    const { codexPath, imagePaths, permissionMode, queryOptions, resumeSessionId, vaultPath } = options;
+    const capabilities = detectCodexCliCapabilities(codexPath);
     const args = [
-      ...this.getPermissionArgs(permissionMode),
-      '-C',
-      vaultPath,
+      ...this.buildCodexGlobalArgs(permissionMode, vaultPath, capabilities.approvalFlagScope),
+      'exec',
+      ...this.buildCodexExecApprovalArgs(capabilities.approvalFlagScope),
     ];
+
+    // Codex 0.114.x exposes --ask-for-approval at the root CLI level, not under
+    // `codex exec --help`. Keep approval args placement capability-driven so CLI
+    // upgrades do not silently break non-interactive launches.
+
+    if (resumeSessionId) {
+      args.push('resume');
+    }
 
     const externalContextPaths = queryOptions?.externalContextPaths ?? this.currentExternalContextPaths;
     const extraDirs = [...new Set(externalContextPaths)].filter((dir) => dir && dir !== vaultPath);
@@ -562,11 +574,6 @@ export class CodexSessionService implements AgentSessionService {
 
     for (const imagePath of imagePaths) {
       args.push('--image', imagePath);
-    }
-
-    args.push('exec');
-    if (resumeSessionId) {
-      args.push('resume');
     }
 
     const requestedModel = queryOptions?.model?.trim();
@@ -596,12 +603,32 @@ export class CodexSessionService implements AgentSessionService {
     return args;
   }
 
-  private getPermissionArgs(mode: PermissionMode): string[] {
-    if (mode === 'yolo') {
-      return ['-a', 'never', '-s', 'danger-full-access'];
+  private buildCodexGlobalArgs(
+    mode: PermissionMode,
+    vaultPath: string,
+    approvalFlagScope: CodexApprovalFlagScope
+  ): string[] {
+    const args = [
+      '-s',
+      mode === 'yolo' ? 'danger-full-access' : 'workspace-write',
+      '-C',
+      vaultPath,
+    ];
+
+    if (approvalFlagScope === 'root' || approvalFlagScope === 'both') {
+      args.unshift('never');
+      args.unshift('-a');
     }
 
-    return ['-a', 'never', '-s', 'workspace-write'];
+    return args;
+  }
+
+  private buildCodexExecApprovalArgs(approvalFlagScope: CodexApprovalFlagScope): string[] {
+    if (approvalFlagScope === 'exec') {
+      return ['-a', 'never'];
+    }
+
+    return [];
   }
 
   private syncPermissionModeFromPayload(payload: Record<string, unknown>): void {

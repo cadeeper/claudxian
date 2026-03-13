@@ -5,9 +5,17 @@ import { PassThrough } from 'stream';
 import { CodexSessionService } from '@/core/agent/CodexSessionService';
 import type { McpServerManager } from '@/core/mcp';
 import type ClaudianPlugin from '@/main';
+import { detectCodexCliCapabilities } from '@/utils/codexCli';
 
 jest.mock('child_process', () => ({
   spawn: jest.fn(),
+}));
+
+jest.mock('@/utils/codexCli', () => ({
+  detectCodexCliCapabilities: jest.fn(() => ({
+    version: '0.114.0',
+    approvalFlagScope: 'root',
+  })),
 }));
 
 type MockMcpServerManager = jest.Mocked<McpServerManager>;
@@ -58,12 +66,17 @@ async function collectChunks(gen: AsyncGenerator<any>): Promise<any[]> {
 
 describe('CodexSessionService', () => {
   const spawnMock = spawn as jest.MockedFunction<typeof spawn>;
+  const detectCodexCliCapabilitiesMock = detectCodexCliCapabilities as jest.MockedFunction<typeof detectCodexCliCapabilities>;
   let mockPlugin: Partial<ClaudianPlugin>;
   let mockMcpManager: MockMcpServerManager;
   let service: CodexSessionService;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    detectCodexCliCapabilitiesMock.mockReturnValue({
+      version: '0.114.0',
+      approvalFlagScope: 'root',
+    });
     mockPlugin = {
       app: {
         vault: { adapter: { basePath: '/mock/vault/path' } },
@@ -146,6 +159,50 @@ describe('CodexSessionService', () => {
       expect.objectContaining({ cwd: '/mock/vault/path' })
     );
     expect(proc.written()).toBe('Say hello');
+  });
+
+  it('places root approval args before exec for current Codex CLI builds', async () => {
+    const proc = createMockChildProcess();
+    spawnMock.mockReturnValue(proc as unknown as ReturnType<typeof spawn>);
+
+    const chunksPromise = collectChunks(service.query('Check ordering'));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    proc.stdout.write('{"type":"thread.started","thread_id":"thread-order-root"}\n');
+    proc.stdout.end();
+    proc.stderr.end();
+    proc.emit('close', 0, null);
+
+    await chunksPromise;
+
+    const args = spawnMock.mock.calls[0]?.[1] ?? [];
+    expect(args.indexOf('-a')).toBeGreaterThanOrEqual(0);
+    expect(args.indexOf('exec')).toBeGreaterThan(args.indexOf('-a'));
+    expect(args[args.indexOf('-a') + 1]).toBe('never');
+  });
+
+  it('falls back to exec-scoped approval args when CLI reports that layout', async () => {
+    detectCodexCliCapabilitiesMock.mockReturnValue({
+      version: 'future',
+      approvalFlagScope: 'exec',
+    });
+
+    const proc = createMockChildProcess();
+    spawnMock.mockReturnValue(proc as unknown as ReturnType<typeof spawn>);
+
+    const chunksPromise = collectChunks(service.query('Check future ordering'));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    proc.stdout.write('{"type":"thread.started","thread_id":"thread-order-exec"}\n');
+    proc.stdout.end();
+    proc.stderr.end();
+    proc.emit('close', 0, null);
+
+    await chunksPromise;
+
+    const args = spawnMock.mock.calls[0]?.[1] ?? [];
+    expect(args.indexOf('exec')).toBeGreaterThanOrEqual(0);
+    expect(args.indexOf('-a')).toBeGreaterThan(args.indexOf('exec'));
   });
 
   it('retries with rebuilt history when resume starts a different thread', async () => {

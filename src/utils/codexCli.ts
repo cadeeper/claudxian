@@ -1,3 +1,4 @@
+import { spawnSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -5,6 +6,84 @@ import * as path from 'path';
 import type { HostnameCliPaths } from '../core/types/settings';
 import { getHostnameKey, parseEnvironmentVariables } from './env';
 import { expandHomePath, parsePathEntries, resolveNvmDefaultBin } from './path';
+
+
+export type CodexApprovalFlagScope = 'root' | 'exec' | 'both' | 'unsupported';
+
+export interface CodexCliCapabilities {
+  version: string | null;
+  approvalFlagScope: CodexApprovalFlagScope;
+}
+
+const codexCliCapabilitiesCache = new Map<string, CodexCliCapabilities>();
+
+function readCommandOutput(commandPath: string, args: string[]): string {
+  try {
+    const result = spawnSync(commandPath, args, {
+      encoding: 'utf8',
+      timeout: 2000,
+    });
+    const stdout = typeof result.stdout === 'string' ? result.stdout : '';
+    const stderr = typeof result.stderr === 'string' ? result.stderr : '';
+    return `${stdout}
+${stderr}`.trim();
+  } catch {
+    return '';
+  }
+}
+
+function extractVersion(output: string): string | null {
+  const match = output.match(/codex-cli\s+([^\s]+)/i);
+  return match?.[1] ?? null;
+}
+
+function hasApprovalFlag(helpText: string): boolean {
+  return helpText.includes('--ask-for-approval');
+}
+
+function resolveApprovalFlagScope(rootHelp: string, execHelp: string): CodexApprovalFlagScope {
+  const supportsRoot = hasApprovalFlag(rootHelp);
+  const supportsExec = hasApprovalFlag(execHelp);
+
+  if (supportsRoot && supportsExec) {
+    return 'both';
+  }
+  if (supportsRoot) {
+    return 'root';
+  }
+  if (supportsExec) {
+    return 'exec';
+  }
+  return 'unsupported';
+}
+
+export function clearCodexCliCapabilitiesCache(): void {
+  codexCliCapabilitiesCache.clear();
+}
+
+export function detectCodexCliCapabilities(commandPath: string): CodexCliCapabilities {
+  const trimmedPath = commandPath.trim();
+  if (!trimmedPath) {
+    return { version: null, approvalFlagScope: 'unsupported' };
+  }
+
+  const cached = codexCliCapabilitiesCache.get(trimmedPath);
+  if (cached) {
+    return cached;
+  }
+
+  const versionOutput = readCommandOutput(trimmedPath, ['--version']);
+  const rootHelp = readCommandOutput(trimmedPath, ['--help']);
+  const execHelp = readCommandOutput(trimmedPath, ['exec', '--help']);
+
+  const capabilities: CodexCliCapabilities = {
+    version: extractVersion(versionOutput || rootHelp),
+    approvalFlagScope: resolveApprovalFlagScope(rootHelp, execHelp),
+  };
+
+  codexCliCapabilitiesCache.set(trimmedPath, capabilities);
+  return capabilities;
+}
 
 function isExistingFile(filePath: string): boolean {
   try {
